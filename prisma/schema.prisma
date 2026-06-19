@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum CompanyStatus {
+  DRAFT
+  PENDING_KYC
+  ACTIVE
+  SUSPENDED
+}
+
+enum CompanyType {
+  SOLE_PROPRIETORSHIP
+  PARTNERSHIP
+  LLP
+  PRIVATE_LIMITED
+  PUBLIC_LIMITED
+  OTHER
+}
+
+enum CompanyRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum KycDocumentType {
+  CERTIFICATE_OF_INCORPORATION
+  GST_CERTIFICATE
+  PAN_CARD
+  ADDRESS_PROOF
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum JobStatus {
+  PUBLISHED
+  CLOSED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+}
+
+enum WorkplaceType {
+  ONSITE
+  HYBRID
+  REMOTE
+}
+
+model User {
+  id           String              @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  email        String              @unique
+  passwordHash String              @map("password_hash")
+  phone        String?
+  status       UserStatus          @default(ACTIVE)
+  memberships  CompanyMembership[]
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Company {
+  id                 String              @id @default(auto()) @map("_id") @db.ObjectId
+  legalName          String              @map("legal_name")
+  displayName        String              @map("display_name")
+  companyType        CompanyType         @map("company_type")
+  registrationNumber String?             @unique @map("registration_number")
+  gstin              String?             @unique
+  status             CompanyStatus       @default(DRAFT)
+  memberships        CompanyMembership[]
+  profile            CompanyProfile?
+  kycVerification    KycVerification?
+  jobs               Job[]
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("companies")
+}
+
+model CompanyMembership {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String      @map("user_id") @db.ObjectId
+  companyId String      @map("company_id") @db.ObjectId
+  role      CompanyRole
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  @@unique([userId, companyId])
+  @@index([companyId, role])
+  @@map("company_memberships")
+}
+
+model CompanyProfile {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  companyId    String   @unique @map("company_id") @db.ObjectId
+  description  String?
+  logoUrl      String?  @map("logo_url")
+  website      String?
+  addressLine1 String?  @map("address_line_1")
+  addressLine2 String?  @map("address_line_2")
+  city         String?
+  state        String?
+  postalCode   String?  @map("postal_code")
+  country      String   @default("IN")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("company_profiles")
+}
+
+model KycVerification {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  companyId       String        @unique @map("company_id") @db.ObjectId
+  status          KycStatus     @default(NOT_STARTED)
+  submittedAt     DateTime?     @map("submitted_at")
+  verifiedAt      DateTime?     @map("verified_at")
+  rejectionReason String?       @map("rejection_reason")
+  company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documents       KycDocument[]
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("kyc_verifications")
+}
+
+model KycDocument {
+  id                String          @id @default(auto()) @map("_id") @db.ObjectId
+  kycVerificationId String          @map("kyc_verification_id") @db.ObjectId
+  type              KycDocumentType
+  storageKey        String          @map("storage_key")
+  fileName          String          @map("file_name")
+  mimeType          String          @map("mime_type")
+  status            DocumentStatus  @default(PENDING)
+  rejectionReason   String?         @map("rejection_reason")
+  kycVerification   KycVerification @relation(fields: [kycVerificationId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  @@unique([kycVerificationId, type])
+  @@map("kyc_documents")
+}
+
+model Job {
+  id                 String              @id @default(auto()) @map("_id") @db.ObjectId
+  companyId          String              @map("company_id") @db.ObjectId
+  title              String
+  description        String
+  location           String
+  employmentType     EmploymentType      @map("employment_type")
+  workplaceType      WorkplaceType       @map("workplace_type")
+  status             JobStatus           @default(PUBLISHED)
+  assessmentToken    String              @unique @map("assessment_token")
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  skillThresholds    JobSkillThreshold[]
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  @@index([companyId, status])
+  @@index([createdAt])
+  @@map("jobs")
+}
+
+model JobSkillThreshold {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  jobId        String   @map("job_id") @db.ObjectId
+  skill        String
+  skillKey     String   @map("skill_key")
+  minimumLevel Int      @map("minimum_level")
+  job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([jobId, skillKey])
+  @@index([skillKey, minimumLevel])
+  @@map("job_skill_thresholds")
+}
