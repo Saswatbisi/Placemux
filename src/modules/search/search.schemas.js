@@ -57,7 +57,7 @@ export const searchJobsQuerySchema = z.object({
   // Cursor-based pagination
   cursor: objectIdSchema.optional(),
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
-});
+}).strict();
 
 /**
  * Query-string schema for the discovery / explore endpoints

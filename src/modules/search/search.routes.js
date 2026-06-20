@@ -20,7 +20,7 @@ export function searchRoutes(db) {
      * Full-text keyword search with filters, sorting, and pagination.
      * Public – no auth required.
      */
-    app.get("/search/jobs", async (request, reply) => {
+    app.get("/search/jobs", async (request) => {
       try {
         const query = searchJobsQuerySchema.parse(request.query);
         const result = await service.searchJobs(query);
@@ -87,7 +87,7 @@ export function searchRoutes(db) {
      * Employment type breakdown with counts.
      * Public – no auth required.
      */
-    app.get("/discover/employment-types", async (request) => {
+    app.get("/discover/employment-types", async () => {
       const result = await service.getEmploymentTypeFacets();
       return { data: result };
     });

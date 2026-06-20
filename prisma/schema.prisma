@@ -55,6 +55,12 @@ enum DocumentStatus {
   REJECTED
 }
 
+enum ApplicationStatus {
+  PENDING
+  SHORTLISTED
+  REJECTED
+}
+
 enum JobStatus {
   PUBLISHED
   CLOSED
@@ -81,6 +87,7 @@ model User {
   phone        String?
   status       UserStatus          @default(ACTIVE)
   memberships  CompanyMembership[]
+  applications Application[]
   createdAt    DateTime            @default(now()) @map("created_at")
   updatedAt    DateTime            @updatedAt @map("updated_at")
 
@@ -185,6 +192,7 @@ model Job {
   assessmentToken    String              @unique @map("assessment_token")
   company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   skillThresholds    JobSkillThreshold[]
+  applications       Application[]
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
 
@@ -205,4 +213,32 @@ model JobSkillThreshold {
   @@unique([jobId, skillKey])
   @@index([skillKey, minimumLevel])
   @@map("job_skill_thresholds")
+}
+
+model Application {
+  id              String             @id @default(auto()) @map("_id") @db.ObjectId
+  jobId           String             @map("job_id") @db.ObjectId
+  userId          String             @map("user_id") @db.ObjectId
+  status          ApplicationStatus  @default(PENDING)
+  job             Job                @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  candidateSkills CandidateSkill[]
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  @@unique([jobId, userId])
+  @@index([status])
+  @@map("applications")
+}
+
+model CandidateSkill {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  applicationId String      @map("application_id") @db.ObjectId
+  skill         String
+  skillKey      String      @map("skill_key")
+  level         Int
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, skillKey])
+  @@map("candidate_skills")
 }
