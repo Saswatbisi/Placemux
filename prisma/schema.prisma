@@ -79,6 +79,12 @@ enum WorkplaceType {
   REMOTE
 }
 
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id           String              @id @default(auto()) @map("_id") @db.ObjectId
   name         String
@@ -88,6 +94,7 @@ model User {
   status       UserStatus          @default(ACTIVE)
   memberships  CompanyMembership[]
   applications Application[]
+  payments     Payment[]
   createdAt    DateTime            @default(now()) @map("created_at")
   updatedAt    DateTime            @updatedAt @map("updated_at")
 
@@ -193,6 +200,7 @@ model Job {
   company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   skillThresholds    JobSkillThreshold[]
   applications       Application[]
+  payments           Payment[]
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
 
@@ -245,4 +253,23 @@ model CandidateSkill {
 
   @@unique([applicationId, skillKey])
   @@map("candidate_skills")
+}
+
+model Payment {
+  id               String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String        @map("user_id") @db.ObjectId
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId            String        @map("job_id") @db.ObjectId
+  job              Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  amount           Int           // in paise
+  currency         String        @default("INR")
+  status           PaymentStatus @default(PENDING)
+  gatewayOrderId   String        @unique @map("gateway_order_id")
+  gatewayPaymentId String?       @map("gateway_payment_id")
+  gatewaySignature String?       @map("gateway_signature")
+  skillsJson       String        @map("skills_json")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  @@map("payments")
 }

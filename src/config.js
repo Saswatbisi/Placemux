@@ -16,6 +16,8 @@ const configSchema = z.object({
     .default("development-only-secret-change-me-now"),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   API_PUBLIC_URL: z.string().url().default("http://localhost:3000"),
+  RAZORPAY_KEY_ID: z.string().optional().default("rzp_test_fakeKeyId123"),
+  RAZORPAY_KEY_SECRET: z.string().optional().default("fakeSecretKey1234567890"),
 });
 
 export const config = configSchema.parse(process.env);
