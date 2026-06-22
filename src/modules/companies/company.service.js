@@ -49,11 +49,19 @@ export class CompanyService {
       where: {
         userId_companyId: { userId, companyId },
       },
-      select: { role: true },
+      select: {
+        role: true,
+        company: {
+          select: { status: true },
+        },
+      },
     });
 
     if (!membership) {
       throw new NotFoundError("Company not found");
+    }
+    if (membership.company?.status === "SUSPENDED") {
+      throw new ForbiddenError("This company is suspended");
     }
     if (allowedRoles && !allowedRoles.includes(membership.role)) {
       throw new ForbiddenError();

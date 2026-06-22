@@ -51,11 +51,19 @@ export class ApplicationService {
       where: {
         userId_companyId: { userId, companyId },
       },
-      select: { role: true },
+      select: {
+        role: true,
+        company: {
+          select: { status: true },
+        },
+      },
     });
 
     if (!membership) {
       throw new NotFoundError("Company not found");
+    }
+    if (membership.company?.status === "SUSPENDED") {
+      throw new ForbiddenError("This company is suspended");
     }
     if (allowedRoles && !allowedRoles.includes(membership.role)) {
       throw new ForbiddenError("You do not have permission to perform this action");
@@ -68,11 +76,18 @@ export class ApplicationService {
       where: { id: jobId },
       include: {
         skillThresholds: true,
+        company: {
+          select: { status: true },
+        },
       },
     });
 
     if (!job || job.status !== "PUBLISHED") {
       throw new NotFoundError("Job not found");
+    }
+
+    if (job.company?.status === "SUSPENDED") {
+      throw new ForbiddenError("This company is suspended");
     }
 
     const existing = await this.db.application.findUnique({
@@ -94,10 +109,16 @@ export class ApplicationService {
     );
 
     const missingSkills = [];
+    const belowThresholdSkills = [];
+
     for (const threshold of job.skillThresholds) {
       const candidateLevel = candidateSkillMap.get(threshold.skillKey);
       if (candidateLevel === undefined) {
         missingSkills.push(threshold.skill);
+      } else if (candidateLevel < threshold.minimumLevel) {
+        belowThresholdSkills.push(
+          `${threshold.skill} (requires level ${threshold.minimumLevel}, provided level ${candidateLevel})`
+        );
       }
     }
 
@@ -107,6 +128,15 @@ export class ApplicationService {
         "VALIDATION_ERROR",
         `Missing required skills: ${missingSkills.join(", ")}`,
         { missingSkills },
+      );
+    }
+
+    if (belowThresholdSkills.length > 0) {
+      throw new AppError(
+        400,
+        "VALIDATION_ERROR",
+        `Skill level is below the minimum required for: ${belowThresholdSkills.join(", ")}`,
+        { belowThresholdSkills },
       );
     }
 

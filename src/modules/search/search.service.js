@@ -27,6 +27,7 @@ const JOB_SELECT = {
     select: {
       id: true,
       displayName: true,
+      status: true,
       profile: {
         select: {
           logoUrl: true,
@@ -72,7 +73,12 @@ export class SearchService {
     } = query;
 
     // ---- Build Prisma where clause ----
-    const where = { status };
+    const where = {
+      status,
+      company: {
+        status: { not: "SUSPENDED" },
+      },
+    };
 
     if (employmentType?.length) {
       where.employmentType = { in: employmentType };
@@ -159,7 +165,7 @@ export class SearchService {
       select: JOB_SELECT,
     });
 
-    if (!job || job.status !== "PUBLISHED") {
+    if (!job || job.status !== "PUBLISHED" || job.company.status === "SUSPENDED") {
       return null;
     }
 
@@ -172,7 +178,10 @@ export class SearchService {
     const { limit, cursor } = query;
 
     const findArgs = {
-      where: { status: "PUBLISHED" },
+      where: {
+        status: "PUBLISHED",
+        company: { status: { not: "SUSPENDED" } },
+      },
       select: JOB_SELECT,
       orderBy: { createdAt: "desc" },
       take: limit + 1,
@@ -203,7 +212,10 @@ export class SearchService {
     // Aggregate distinct skills from published jobs
     const thresholds = await this.db.jobSkillThreshold.findMany({
       where: {
-        job: { status: "PUBLISHED" },
+        job: {
+          status: "PUBLISHED",
+          company: { status: { not: "SUSPENDED" } },
+        },
       },
       select: {
         skill: true,
@@ -234,7 +246,10 @@ export class SearchService {
     const { limit } = query;
 
     const jobs = await this.db.job.findMany({
-      where: { status: "PUBLISHED" },
+      where: {
+        status: "PUBLISHED",
+        company: { status: { not: "SUSPENDED" } },
+      },
       select: { location: true },
     });
 
@@ -258,7 +273,10 @@ export class SearchService {
 
   async getEmploymentTypeFacets() {
     const jobs = await this.db.job.findMany({
-      where: { status: "PUBLISHED" },
+      where: {
+        status: "PUBLISHED",
+        company: { status: { not: "SUSPENDED" } },
+      },
       select: { employmentType: true },
     });
 

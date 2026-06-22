@@ -197,6 +197,10 @@ model Job {
   updatedAt          DateTime            @updatedAt @map("updated_at")
 
   @@index([companyId, status])
+  @@index([status, createdAt])
+  @@index([location])
+  @@index([employmentType])
+  @@index([workplaceType])
   @@index([createdAt])
   @@map("jobs")
 }

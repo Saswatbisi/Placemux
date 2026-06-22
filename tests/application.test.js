@@ -166,6 +166,31 @@ describe("Application & Shortlisting API", () => {
     expect(res.json().error.code).toBe("VALIDATION_ERROR");
   });
 
+  it("POST /api/v1/jobs/:jobId/applications — rejects if skill levels are below threshold", async () => {
+    const db = createFakeDb();
+    db.job.findUnique.mockResolvedValue(fakeJob);
+    db.application.findUnique.mockResolvedValue(null);
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const authHeaders = await getAuthHeaders(app);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/jobs/${fakeJob.id}/applications`,
+      headers: authHeaders,
+      payload: {
+        // React minimum required level is 70. We send 50.
+        skills: [{ skill: "React", level: 50 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(body.error.message).toContain("below the minimum required");
+  });
+
   it("GET /api/v1/applications — lists candidate's own applications", async () => {
     const db = createFakeDb();
     db.application.findMany.mockResolvedValue([fakeApplication]);

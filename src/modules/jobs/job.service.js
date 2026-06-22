@@ -37,11 +37,19 @@ export class JobService {
       where: {
         userId_companyId: { userId, companyId },
       },
-      select: { role: true },
+      select: {
+        role: true,
+        company: {
+          select: { status: true },
+        },
+      },
     });
 
     if (!membership) {
       throw new NotFoundError("Company not found");
+    }
+    if (membership.company?.status === "SUSPENDED") {
+      throw new ForbiddenError("This company is suspended");
     }
     if (!["OWNER", "ADMIN"].includes(membership.role)) {
       throw new ForbiddenError("Only company owners and admins can post jobs");
