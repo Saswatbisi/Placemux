@@ -68,7 +68,7 @@ export class PaymentService {
         missingSkills.push(threshold.skill);
       } else if (candidateLevel < threshold.minimumLevel) {
         belowThresholdSkills.push(
-          `${threshold.skill} (requires level ${threshold.minimumLevel}, provided level ${candidateLevel})`
+          `${threshold.skill} (requires level ${threshold.minimumLevel}, provided level ${candidateLevel})`,
         );
       }
     }
@@ -174,6 +174,72 @@ export class PaymentService {
         400,
         "INVALID_SIGNATURE",
         "Payment signature verification failed",
+      );
+    }
+
+    // 2.5 Fetch payment from gateway to verify amount, currency, and capture status
+    let gatewayPayment;
+    try {
+      gatewayPayment = await this.razorpay.payments.fetch(gatewayPaymentId);
+    } catch (err) {
+      throw new AppError(
+        500,
+        "PAYMENT_GATEWAY_ERROR",
+        "Failed to fetch payment details from gateway",
+        { originalError: err.message },
+      );
+    }
+
+    if (
+      gatewayPayment.amount !== payment.amount ||
+      gatewayPayment.currency !== payment.currency
+    ) {
+      throw new AppError(
+        400,
+        "PAYMENT_AMOUNT_MISMATCH",
+        "Payment amount or currency mismatch with gateway record",
+      );
+    }
+
+    if (gatewayPayment.status === "failed") {
+      await this.db.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: "FAILED",
+          gatewayPaymentId,
+          gatewaySignature,
+        },
+      });
+      throw new AppError(
+        400,
+        "PAYMENT_FAILED",
+        "Payment status on gateway is failed",
+      );
+    }
+
+    // Capture payment if it is authorized but not yet captured
+    if (gatewayPayment.status === "authorized") {
+      try {
+        gatewayPayment = await this.razorpay.payments.capture(
+          gatewayPaymentId,
+          payment.amount,
+          payment.currency,
+        );
+      } catch (err) {
+        throw new AppError(
+          500,
+          "PAYMENT_GATEWAY_ERROR",
+          "Failed to capture payment with gateway",
+          { originalError: err.message },
+        );
+      }
+    }
+
+    if (gatewayPayment.status !== "captured") {
+      throw new AppError(
+        400,
+        "PAYMENT_NOT_CAPTURED",
+        `Payment could not be captured. Status: ${gatewayPayment.status}`,
       );
     }
 

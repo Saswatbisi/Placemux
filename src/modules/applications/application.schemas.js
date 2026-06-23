@@ -37,20 +37,28 @@ export const updateApplicationStatusSchema = z
   })
   .strict();
 
-export const jobIdParamsSchema = z.object({
-  jobId: objectIdSchema,
-}).strict();
+export const jobIdParamsSchema = z
+  .object({
+    jobId: objectIdSchema,
+  })
+  .strict();
 
-export const companyApplicationParamsSchema = z.object({
-  companyId: objectIdSchema,
-  applicationId: objectIdSchema,
-}).strict();
+export const companyApplicationParamsSchema = z
+  .object({
+    companyId: objectIdSchema,
+    applicationId: objectIdSchema,
+  })
+  .strict();
 
-export const companyJobParamsSchema = z.object({
-  companyId: objectIdSchema,
-  jobId: objectIdSchema,
-}).strict();
+export const companyJobParamsSchema = z
+  .object({
+    companyId: objectIdSchema,
+    jobId: objectIdSchema,
+  })
+  .strict();
 
-export const applicationIdParamsSchema = z.object({
-  id: objectIdSchema,
-}).strict();
+export const applicationIdParamsSchema = z
+  .object({
+    id: objectIdSchema,
+  })
+  .strict();

@@ -72,14 +72,25 @@ describe("applyToJobSchema validation", () => {
 
 describe("updateApplicationStatusSchema validation", () => {
   it("accepts valid status values", () => {
-    expect(updateApplicationStatusSchema.safeParse({ status: "PENDING" }).success).toBe(true);
-    expect(updateApplicationStatusSchema.safeParse({ status: "SHORTLISTED" }).success).toBe(true);
-    expect(updateApplicationStatusSchema.safeParse({ status: "REJECTED" }).success).toBe(true);
+    expect(
+      updateApplicationStatusSchema.safeParse({ status: "PENDING" }).success,
+    ).toBe(true);
+    expect(
+      updateApplicationStatusSchema.safeParse({ status: "SHORTLISTED" })
+        .success,
+    ).toBe(true);
+    expect(
+      updateApplicationStatusSchema.safeParse({ status: "REJECTED" }).success,
+    ).toBe(true);
   });
 
   it("rejects invalid status values", () => {
-    expect(updateApplicationStatusSchema.safeParse({ status: "COMPLETED" }).success).toBe(false);
-    expect(updateApplicationStatusSchema.safeParse({ status: 123 }).success).toBe(false);
+    expect(
+      updateApplicationStatusSchema.safeParse({ status: "COMPLETED" }).success,
+    ).toBe(false);
+    expect(
+      updateApplicationStatusSchema.safeParse({ status: 123 }).success,
+    ).toBe(false);
   });
 
   it("rejects extra properties due to strict mode", () => {

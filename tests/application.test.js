@@ -36,9 +36,7 @@ const fakeApplication = {
   status: "PENDING",
   createdAt: new Date(),
   updatedAt: new Date(),
-  candidateSkills: [
-    { id: "candidate-skill-1", skill: "React", level: 80 },
-  ],
+  candidateSkills: [{ id: "candidate-skill-1", skill: "React", level: 80 }],
   job: {
     id: fakeJob.id,
     title: fakeJob.title,
@@ -72,13 +70,19 @@ function createFakeDb() {
       create: vi.fn(),
       update: vi.fn(),
     },
+    payment: {
+      findFirst: vi.fn(),
+    },
   };
   db.$transaction = vi.fn().mockImplementation((callback) => callback(db));
   return db;
 }
 
 // ---- Helper to get authenticated client headers ----
-async function getAuthHeaders(app, payload = { userId: fakeUser.id, email: fakeUser.email }) {
+async function getAuthHeaders(
+  app,
+  payload = { userId: fakeUser.id, email: fakeUser.email },
+) {
   const token = app.jwt.sign(payload);
   return {
     Authorization: `Bearer ${token}`,
@@ -99,6 +103,10 @@ describe("Application & Shortlisting API", () => {
     const db = createFakeDb();
     db.job.findUnique.mockResolvedValue(fakeJob);
     db.application.findUnique.mockResolvedValue(null);
+    db.payment.findFirst.mockResolvedValue({
+      id: "payment_fake123",
+      status: "COMPLETED",
+    });
     db.application.create.mockResolvedValue(fakeApplication);
 
     const app = await buildApp(db);
@@ -125,6 +133,10 @@ describe("Application & Shortlisting API", () => {
     const db = createFakeDb();
     db.job.findUnique.mockResolvedValue(fakeJob);
     db.application.findUnique.mockResolvedValue(fakeApplication);
+    db.payment.findFirst.mockResolvedValue({
+      id: "payment_fake123",
+      status: "COMPLETED",
+    });
 
     const app = await buildApp(db);
     apps.push(app);
@@ -147,6 +159,10 @@ describe("Application & Shortlisting API", () => {
     const db = createFakeDb();
     db.job.findUnique.mockResolvedValue(fakeJob);
     db.application.findUnique.mockResolvedValue(null);
+    db.payment.findFirst.mockResolvedValue({
+      id: "payment_fake123",
+      status: "COMPLETED",
+    });
 
     const app = await buildApp(db);
     apps.push(app);
@@ -170,6 +186,10 @@ describe("Application & Shortlisting API", () => {
     const db = createFakeDb();
     db.job.findUnique.mockResolvedValue(fakeJob);
     db.application.findUnique.mockResolvedValue(null);
+    db.payment.findFirst.mockResolvedValue({
+      id: "payment_fake123",
+      status: "COMPLETED",
+    });
 
     const app = await buildApp(db);
     apps.push(app);
@@ -189,6 +209,29 @@ describe("Application & Shortlisting API", () => {
     const body = res.json();
     expect(body.error.code).toBe("VALIDATION_ERROR");
     expect(body.error.message).toContain("below the minimum required");
+  });
+
+  it("POST /api/v1/jobs/:jobId/applications — rejects if no completed payment exists", async () => {
+    const db = createFakeDb();
+    db.job.findUnique.mockResolvedValue(fakeJob);
+    db.application.findUnique.mockResolvedValue(null);
+    db.payment.findFirst.mockResolvedValue(null);
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const authHeaders = await getAuthHeaders(app);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/jobs/${fakeJob.id}/applications`,
+      headers: authHeaders,
+      payload: {
+        skills: [{ skill: "React", level: 80 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(402);
+    expect(res.json().error.code).toBe("PAYMENT_REQUIRED");
   });
 
   it("GET /api/v1/applications — lists candidate's own applications", async () => {

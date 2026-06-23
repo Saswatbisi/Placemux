@@ -99,16 +99,16 @@ the private assessment token or company membership data.
 
 ## Validation Rules
 
-| Field | Rule |
-| --- | --- |
-| `title` | 3-120 characters |
-| `description` | 20-10,000 characters |
-| `location` | 2-120 characters |
-| `employmentType` | `FULL_TIME`, `PART_TIME`, `CONTRACT`, or `INTERNSHIP` |
-| `workplaceType` | `ONSITE`, `HYBRID`, or `REMOTE` |
-| `skillThresholds` | 1-20 skills per job |
-| `skill` | 1-80 characters |
-| `minimumLevel` | Integer from 1 through 100 |
+| Field             | Rule                                                  |
+| ----------------- | ----------------------------------------------------- |
+| `title`           | 3-120 characters                                      |
+| `description`     | 20-10,000 characters                                  |
+| `location`        | 2-120 characters                                      |
+| `employmentType`  | `FULL_TIME`, `PART_TIME`, `CONTRACT`, or `INTERNSHIP` |
+| `workplaceType`   | `ONSITE`, `HYBRID`, or `REMOTE`                       |
+| `skillThresholds` | 1-20 skills per job                                   |
+| `skill`           | 1-80 characters                                       |
+| `minimumLevel`    | Integer from 1 through 100                            |
 
 Skill names must be unique within a job. Duplicate names are rejected
 case-insensitively, so `Node.js` and `node.js` cannot both be submitted.

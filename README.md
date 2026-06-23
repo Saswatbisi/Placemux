@@ -122,14 +122,14 @@ phase.
 
 ## API routes
 
-| Method | Route | Authentication | Purpose |
-| --- | --- | --- | --- |
-| `GET` | `/health` | No | Service health |
-| `POST` | `/api/v1/auth/companies/signup` | No | Atomic owner/company signup |
-| `POST` | `/api/v1/auth/login` | No | Get a fresh JWT |
-| `GET` | `/api/v1/companies/:id` | Member | Read company and onboarding state |
-| `PATCH` | `/api/v1/companies/:id/profile` | Owner/Admin | Update marketplace profile |
-| `POST` | `/api/v1/companies/:id/kyc` | Owner/Admin | Submit KYC metadata |
+| Method  | Route                           | Authentication | Purpose                           |
+| ------- | ------------------------------- | -------------- | --------------------------------- |
+| `GET`   | `/health`                       | No             | Service health                    |
+| `POST`  | `/api/v1/auth/companies/signup` | No             | Atomic owner/company signup       |
+| `POST`  | `/api/v1/auth/login`            | No             | Get a fresh JWT                   |
+| `GET`   | `/api/v1/companies/:id`         | Member         | Read company and onboarding state |
+| `PATCH` | `/api/v1/companies/:id/profile` | Owner/Admin    | Update marketplace profile        |
+| `POST`  | `/api/v1/companies/:id/kyc`     | Owner/Admin    | Submit KYC metadata               |
 
 ## Verification
 

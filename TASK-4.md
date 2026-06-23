@@ -8,22 +8,22 @@ Exposes endpoints that allow candidates (students) to apply to published jobs wi
 
 ## New Files
 
-| File | Purpose |
-|------|---------|
-| `src/modules/applications/application.schemas.js` | Zod validation schemas for job applications and status updates |
+| File                                              | Purpose                                                                                  |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `src/modules/applications/application.schemas.js` | Zod validation schemas for job applications and status updates                           |
 | `src/modules/applications/application.service.js` | Business logic for validating requirements, processing applications, and managing status |
-| `src/modules/applications/application.routes.js`  | Fastify route definitions for application and shortlisting endpoints |
-| `tests/application.validation.test.js`      | Unit tests for application query and body schemas |
-| `tests/application.test.js`                 | Integration tests for application and shortlisting endpoints |
+| `src/modules/applications/application.routes.js`  | Fastify route definitions for application and shortlisting endpoints                     |
+| `tests/application.validation.test.js`            | Unit tests for application query and body schemas                                        |
+| `tests/application.test.js`                       | Integration tests for application and shortlisting endpoints                             |
 
 ## Modified Files
 
-| File | Change |
-|------|--------|
-| `prisma/schema.prisma` | Added `ApplicationStatus` enum, `Application`, and `CandidateSkill` models |
-| `src/app.js` | Registered `applicationRoutes` under `/api/v1` prefix |
-| `src/modules/search/search.schemas.js` | Added `.strict()` to `searchJobsQuerySchema` |
-| `src/modules/search/search.routes.js` | Removed unused arguments to resolve linting errors |
+| File                                   | Change                                                                     |
+| -------------------------------------- | -------------------------------------------------------------------------- |
+| `prisma/schema.prisma`                 | Added `ApplicationStatus` enum, `Application`, and `CandidateSkill` models |
+| `src/app.js`                           | Registered `applicationRoutes` under `/api/v1` prefix                      |
+| `src/modules/search/search.schemas.js` | Added `.strict()` to `searchJobsQuerySchema`                               |
+| `src/modules/search/search.routes.js`  | Removed unused arguments to resolve linting errors                         |
 
 ---
 
@@ -34,9 +34,11 @@ All endpoints require authentication unless specified otherwise.
 ### 📝 Student Applications
 
 #### `POST /api/v1/jobs/:jobId/applications`
+
 Allows a student to apply for a published job.
 
 **Request Body:**
+
 ```json
 {
   "skills": [
@@ -56,6 +58,7 @@ Allows a student to apply for a published job.
   - The job must be `PUBLISHED` (returns `404 Not Found` if the job is closed or missing).
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -93,6 +96,7 @@ Allows a student to apply for a published job.
 ---
 
 #### `GET /api/v1/applications`
+
 Retrieve the authenticated candidate's own job applications.
 
 **Response:** `{ "data": [ ...applications ] }`
@@ -100,6 +104,7 @@ Retrieve the authenticated candidate's own job applications.
 ---
 
 #### `GET /api/v1/applications/:id`
+
 Retrieve application details for a specific application ID. Accessible by the applicant, or any member of the company that posted the job.
 
 ---
@@ -107,27 +112,32 @@ Retrieve application details for a specific application ID. Accessible by the ap
 ### 💼 Company Shortlisting
 
 #### `GET /api/v1/companies/:companyId/applications`
+
 Retrieve all applications submitted to jobs posted by the company. Accessible by any member of the company.
 
 ---
 
 #### `GET /api/v1/companies/:companyId/jobs/:jobId/applications`
+
 Retrieve applications submitted to a specific job posted by the company. Accessible by any member of the company.
 
 ---
 
 #### `PATCH /api/v1/companies/:companyId/applications/:applicationId`
+
 Update the status of a job application (e.g. shortlisting or rejecting a candidate).
 
 - **Authorization:** Only users with `OWNER` or `ADMIN` roles for the company are authorized to update status. Regular `MEMBER` users will receive `403 Forbidden`. Non-members will receive `404 Company not found` to prevent enumeration.
 
 **Request Body:**
+
 ```json
 {
   "status": "SHORTLISTED"
 }
 ```
-*Note: valid status values are `PENDING`, `SHORTLISTED`, or `REJECTED`.*
+
+_Note: valid status values are `PENDING`, `SHORTLISTED`, or `REJECTED`._
 
 **Response:** `{ "data": { ...updatedApplication } }`
 
@@ -140,6 +150,7 @@ npm test
 ```
 
 Tests cover:
+
 - Zod schema rules (strict validation, array limits, integer bounds, unique skills check).
 - Successful application flow with database schema verification.
 - Prevent duplicate applications (`409 Conflict`).

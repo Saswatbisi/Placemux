@@ -8,20 +8,20 @@ Exposes secure endpoints and designs a relational payment data model to handle c
 
 ## New Files
 
-| File | Purpose |
-|------|---------|
-| `src/modules/payments/payment.schemas.js` | Zod schemas validating checkout details and verification signature payloads |
-| `src/modules/payments/payment.service.js` | Core payment logic including checkout creation, signature verification, and atomic database transaction processing |
-| `src/modules/payments/payment.routes.js` | Fastify endpoint handlers for checkout and signature verification |
-| `tests/payment.test.js` | Integration tests verifying the checkout creation, validation checks (skill thresholds and suspensions), and verification success/failure states |
+| File                                      | Purpose                                                                                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/modules/payments/payment.schemas.js` | Zod schemas validating checkout details and verification signature payloads                                                                      |
+| `src/modules/payments/payment.service.js` | Core payment logic including checkout creation, signature verification, and atomic database transaction processing                               |
+| `src/modules/payments/payment.routes.js`  | Fastify endpoint handlers for checkout and signature verification                                                                                |
+| `tests/payment.test.js`                   | Integration tests verifying the checkout creation, validation checks (skill thresholds and suspensions), and verification success/failure states |
 
 ## Modified Files
 
-| File | Change |
-|------|--------|
+| File                   | Change                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
 | `prisma/schema.prisma` | Added `PaymentStatus` enum, `Payment` model, and relations to `User` and `Job` collections. |
-| `src/config.js` | Added configurations for `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` with defaults. |
-| `src/app.js` | Registered the new `paymentRoutes` under the `/api/v1/payments` prefix. |
+| `src/config.js`        | Added configurations for `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` with defaults.         |
+| `src/app.js`           | Registered the new `paymentRoutes` under the `/api/v1/payments` prefix.                     |
 
 ---
 
@@ -30,16 +30,17 @@ Exposes secure endpoints and designs a relational payment data model to handle c
 Both checkout and verification endpoints require candidate authentication via JWT.
 
 ### 💳 1. Payment Checkout Order
+
 #### `POST /api/v1/payments/checkout`
+
 Allows a student to initiate a payment checkout to apply for a published job.
 
 **Request Body:**
+
 ```json
 {
   "jobId": "685400000000000000000003",
-  "skills": [
-    { "skill": "React", "level": 80 }
-  ]
+  "skills": [{ "skill": "React", "level": 80 }]
 }
 ```
 
@@ -50,6 +51,7 @@ Allows a student to initiate a payment checkout to apply for a published job.
   - A `PENDING` payment record is saved, securely locking the verified candidate skills payload (`skillsJson`) to prevent client-side tampering during checkout.
 
 **Response (201 Created):**
+
 ```json
 {
   "data": {
@@ -65,10 +67,13 @@ Allows a student to initiate a payment checkout to apply for a published job.
 ---
 
 ### 🔑 2. Payment Signature Verification
+
 #### `POST /api/v1/payments/verify`
+
 Verifies the signature returned by the Razorpay checkout modal and activates the application.
 
 **Request Body:**
+
 ```json
 {
   "gatewayOrderId": "order_fake123",
@@ -83,6 +88,7 @@ Verifies the signature returned by the Razorpay checkout modal and activates the
   - On success, updates the payment record to `COMPLETED` and creates the `Application` along with candidate skills **atomically inside a database transaction**. This guarantees that the candidate is never charged without the application being successfully created.
 
 **Response (200 OK):**
+
 ```json
 {
   "data": {
@@ -110,8 +116,9 @@ npx vitest run --sequence.concurrent=false --maxWorkers=1
 ```
 
 All 64 tests covering:
+
 - Creating Razorpay checkout orders with skill validations.
 - Verification signature match / mismatch.
 - Company suspension blocks on checkouts and verification.
 - Full application workflow.
-will run and pass successfully.
+  will run and pass successfully.

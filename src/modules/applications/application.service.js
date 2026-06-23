@@ -66,7 +66,9 @@ export class ApplicationService {
       throw new ForbiddenError("This company is suspended");
     }
     if (allowedRoles && !allowedRoles.includes(membership.role)) {
-      throw new ForbiddenError("You do not have permission to perform this action");
+      throw new ForbiddenError(
+        "You do not have permission to perform this action",
+      );
     }
     return membership;
   }
@@ -100,6 +102,23 @@ export class ApplicationService {
       throw new ConflictError("You have already applied to this job");
     }
 
+    // Gating check: Ensure there is a completed payment for this user and job
+    const completedPayment = await this.db.payment.findFirst({
+      where: {
+        userId,
+        jobId,
+        status: "COMPLETED",
+      },
+    });
+
+    if (!completedPayment) {
+      throw new AppError(
+        402,
+        "PAYMENT_REQUIRED",
+        "Payment is required to apply for this job",
+      );
+    }
+
     // Verify candidate has submitted levels for all required job skills
     const candidateSkillMap = new Map(
       input.skills.map((s) => [
@@ -117,7 +136,7 @@ export class ApplicationService {
         missingSkills.push(threshold.skill);
       } else if (candidateLevel < threshold.minimumLevel) {
         belowThresholdSkills.push(
-          `${threshold.skill} (requires level ${threshold.minimumLevel}, provided level ${candidateLevel})`
+          `${threshold.skill} (requires level ${threshold.minimumLevel}, provided level ${candidateLevel})`,
         );
       }
     }
@@ -180,7 +199,11 @@ export class ApplicationService {
   }
 
   async getCompanyApplications(companyId, userId, jobId = null) {
-    await this.requireMembership(companyId, userId, ["OWNER", "ADMIN", "MEMBER"]);
+    await this.requireMembership(companyId, userId, [
+      "OWNER",
+      "ADMIN",
+      "MEMBER",
+    ]);
 
     const whereClause = {
       job: {

@@ -165,7 +165,11 @@ export class SearchService {
       select: JOB_SELECT,
     });
 
-    if (!job || job.status !== "PUBLISHED" || job.company.status === "SUSPENDED") {
+    if (
+      !job ||
+      job.status !== "PUBLISHED" ||
+      job.company.status === "SUSPENDED"
+    ) {
       return null;
     }
 

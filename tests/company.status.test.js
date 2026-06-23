@@ -50,12 +50,18 @@ function createFakeDb() {
     kycVerification: {
       findUnique: vi.fn(),
     },
+    payment: {
+      findFirst: vi.fn(),
+    },
   };
   db.$transaction = vi.fn().mockImplementation((callback) => callback(db));
   return db;
 }
 
-async function getAuthHeaders(app, payload = { userId: fakeUser.id, email: fakeUser.email }) {
+async function getAuthHeaders(
+  app,
+  payload = { userId: fakeUser.id, email: fakeUser.email },
+) {
   const token = app.jwt.sign(payload);
   return {
     Authorization: `Bearer ${token}`,
@@ -87,7 +93,8 @@ describe("Suspended Company Constraints", () => {
       headers: authHeaders,
       payload: {
         title: "Backend Engineer",
-        description: "Build modern REST APIs using Fastify and Prisma for backend systems.",
+        description:
+          "Build modern REST APIs using Fastify and Prisma for backend systems.",
         location: "Bengaluru",
         employmentType: "FULL_TIME",
         workplaceType: "HYBRID",

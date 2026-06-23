@@ -112,7 +112,11 @@ export class AuthService {
       user && (await bcrypt.compare(input.password, user.passwordHash));
 
     if (!user || !passwordMatches) {
-      throw new AppError(401, "INVALID_CREDENTIALS", "Invalid email or password");
+      throw new AppError(
+        401,
+        "INVALID_CREDENTIALS",
+        "Invalid email or password",
+      );
     }
     if (user.status !== "ACTIVE") {
       throw new AppError(403, "ACCOUNT_SUSPENDED", "This account is suspended");

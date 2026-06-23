@@ -40,11 +40,7 @@ export class CompanyService {
     this.db = db;
   }
 
-  async requireMembership(
-    companyId,
-    userId,
-    allowedRoles,
-  ) {
+  async requireMembership(companyId, userId, allowedRoles) {
     const membership = await this.db.companyMembership.findUnique({
       where: {
         userId_companyId: { userId, companyId },
@@ -82,11 +78,7 @@ export class CompanyService {
     return company;
   }
 
-  async updateProfile(
-    companyId,
-    userId,
-    input,
-  ) {
+  async updateProfile(companyId, userId, input) {
     await this.requireMembership(companyId, userId, ["OWNER", "ADMIN"]);
 
     return this.db.companyProfile.update({

@@ -1,7 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "node:crypto";
 import { buildApp } from "../src/app.js";
 import { config } from "../src/config.js";
+
+const mockOrdersCreate = vi.fn();
+const mockPaymentsFetch = vi.fn();
+const mockPaymentsCapture = vi.fn();
 
 // ---- Mock Razorpay globally for this test file ----
 vi.mock("razorpay", () => {
@@ -9,11 +13,11 @@ vi.mock("razorpay", () => {
     default: vi.fn().mockImplementation(function () {
       return {
         orders: {
-          create: vi.fn().mockResolvedValue({
-            id: "order_fake123",
-            amount: 10000,
-            currency: "INR",
-          }),
+          create: mockOrdersCreate,
+        },
+        payments: {
+          fetch: mockPaymentsFetch,
+          capture: mockPaymentsCapture,
         },
       };
     }),
@@ -69,9 +73,7 @@ const fakeApplication = {
   status: "PENDING",
   createdAt: new Date(),
   updatedAt: new Date(),
-  candidateSkills: [
-    { id: "candidate-skill-1", skill: "React", level: 80 },
-  ],
+  candidateSkills: [{ id: "candidate-skill-1", skill: "React", level: 80 }],
 };
 
 function createFakeDb() {
@@ -94,7 +96,10 @@ function createFakeDb() {
   return db;
 }
 
-async function getAuthHeaders(app, payload = { userId: fakeUser.id, email: fakeUser.email }) {
+async function getAuthHeaders(
+  app,
+  payload = { userId: fakeUser.id, email: fakeUser.email },
+) {
   const token = app.jwt.sign(payload);
   return {
     Authorization: `Bearer ${token}`,
@@ -103,6 +108,27 @@ async function getAuthHeaders(app, payload = { userId: fakeUser.id, email: fakeU
 
 describe("Payments API", () => {
   const apps = [];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockOrdersCreate.mockResolvedValue({
+      id: "order_fake123",
+      amount: 10000,
+      currency: "INR",
+    });
+    mockPaymentsFetch.mockResolvedValue({
+      id: "pay_fake123",
+      status: "authorized",
+      amount: 10000,
+      currency: "INR",
+    });
+    mockPaymentsCapture.mockResolvedValue({
+      id: "pay_fake123",
+      status: "captured",
+      amount: 10000,
+      currency: "INR",
+    });
+  });
 
   afterEach(async () => {
     await Promise.all(apps.map((a) => a.close()));
@@ -192,7 +218,10 @@ describe("Payments API", () => {
     db.payment.findUnique.mockResolvedValue(fakePayment);
     db.application.findUnique.mockResolvedValue(null);
     db.application.create.mockResolvedValue(fakeApplication);
-    db.payment.update.mockResolvedValue({ ...fakePayment, status: "COMPLETED" });
+    db.payment.update.mockResolvedValue({
+      ...fakePayment,
+      status: "COMPLETED",
+    });
 
     const app = await buildApp(db);
     apps.push(app);
@@ -247,7 +276,88 @@ describe("Payments API", () => {
     expect(db.payment.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "FAILED" }),
-      })
+      }),
+    );
+  });
+
+  it("POST /api/v1/payments/verify — rejects if gateway payment amount/currency mismatches", async () => {
+    const db = createFakeDb();
+    db.payment.findUnique.mockResolvedValue(fakePayment);
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    // Mismatched amount
+    mockPaymentsFetch.mockResolvedValueOnce({
+      id: "pay_fake123",
+      status: "authorized",
+      amount: 5000, // expecting 10000
+      currency: "INR",
+    });
+
+    const gatewayOrderId = "order_fake123";
+    const gatewayPaymentId = "pay_fake123";
+    const gatewaySignature = crypto
+      .createHmac("sha256", config.RAZORPAY_KEY_SECRET)
+      .update(`${gatewayOrderId}|${gatewayPaymentId}`)
+      .digest("hex");
+
+    const authHeaders = await getAuthHeaders(app);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/payments/verify",
+      headers: authHeaders,
+      payload: {
+        gatewayOrderId,
+        gatewayPaymentId,
+        gatewaySignature,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("PAYMENT_AMOUNT_MISMATCH");
+  });
+
+  it("POST /api/v1/payments/verify — rejects and sets payment to FAILED if gateway status is failed", async () => {
+    const db = createFakeDb();
+    db.payment.findUnique.mockResolvedValue(fakePayment);
+    db.payment.update.mockResolvedValue({ ...fakePayment, status: "FAILED" });
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    mockPaymentsFetch.mockResolvedValueOnce({
+      id: "pay_fake123",
+      status: "failed",
+      amount: 10000,
+      currency: "INR",
+    });
+
+    const gatewayOrderId = "order_fake123";
+    const gatewayPaymentId = "pay_fake123";
+    const gatewaySignature = crypto
+      .createHmac("sha256", config.RAZORPAY_KEY_SECRET)
+      .update(`${gatewayOrderId}|${gatewayPaymentId}`)
+      .digest("hex");
+
+    const authHeaders = await getAuthHeaders(app);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/payments/verify",
+      headers: authHeaders,
+      payload: {
+        gatewayOrderId,
+        gatewayPaymentId,
+        gatewaySignature,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("PAYMENT_FAILED");
+    expect(db.payment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "FAILED" }),
+      }),
     );
   });
 });

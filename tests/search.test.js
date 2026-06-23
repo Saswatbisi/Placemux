@@ -7,7 +7,8 @@ const fakeJob = {
   id: "507f1f77bcf86cd799439011",
   companyId: "507f1f77bcf86cd799439022",
   title: "Senior React Developer",
-  description: "Build modern UIs with React and TypeScript for a fintech product.",
+  description:
+    "Build modern UIs with React and TypeScript for a fintech product.",
   location: "Bengaluru",
   employmentType: "FULL_TIME",
   workplaceType: "HYBRID",
@@ -20,7 +21,12 @@ const fakeJob = {
   },
   skillThresholds: [
     { id: "aaa111", skill: "React", skillKey: "react", minimumLevel: 70 },
-    { id: "bbb222", skill: "TypeScript", skillKey: "typescript", minimumLevel: 50 },
+    {
+      id: "bbb222",
+      skill: "TypeScript",
+      skillKey: "typescript",
+      minimumLevel: 50,
+    },
   ],
   createdAt: new Date("2026-06-15T10:00:00Z"),
   updatedAt: new Date("2026-06-15T10:00:00Z"),
