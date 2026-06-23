@@ -39,3 +39,18 @@ export const verifyPaymentSchema = z
     gatewaySignature: z.string().trim().min(1),
   })
   .strict();
+
+export const paymentIdParamsSchema = z
+  .object({
+    id: objectIdSchema,
+  })
+  .strict();
+
+export const reconciliationQuerySchema = z
+  .object({
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format")
+      .optional(),
+  })
+  .strict();

@@ -83,6 +83,7 @@ enum PaymentStatus {
   PENDING
   COMPLETED
   FAILED
+  REFUNDED
 }
 
 model User {
@@ -267,6 +268,8 @@ model Payment {
   gatewayOrderId   String        @unique @map("gateway_order_id")
   gatewayPaymentId String?       @map("gateway_payment_id")
   gatewaySignature String?       @map("gateway_signature")
+  gatewayRefundId  String?       @map("gateway_refund_id")
+  refundedAt       DateTime?     @map("refunded_at")
   skillsJson       String        @map("skills_json")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
