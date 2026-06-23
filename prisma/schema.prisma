@@ -270,6 +270,7 @@ model Payment {
   gatewaySignature String?       @map("gateway_signature")
   gatewayRefundId  String?       @map("gateway_refund_id")
   refundedAt       DateTime?     @map("refunded_at")
+  failureReason    String?       @map("failure_reason")
   skillsJson       String        @map("skills_json")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")

@@ -168,6 +168,7 @@ export class PaymentService {
           status: "FAILED",
           gatewayPaymentId,
           gatewaySignature,
+          failureReason: "Signature verification failed",
         },
       });
       throw new AppError(
@@ -194,6 +195,15 @@ export class PaymentService {
       gatewayPayment.amount !== payment.amount ||
       gatewayPayment.currency !== payment.currency
     ) {
+      await this.db.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: "FAILED",
+          gatewayPaymentId,
+          gatewaySignature,
+          failureReason: "Payment amount or currency mismatch with gateway record",
+        },
+      });
       throw new AppError(
         400,
         "PAYMENT_AMOUNT_MISMATCH",
@@ -208,6 +218,7 @@ export class PaymentService {
           status: "FAILED",
           gatewayPaymentId,
           gatewaySignature,
+          failureReason: gatewayPayment.error_description || "Payment status on gateway is failed",
         },
       });
       throw new AppError(
@@ -218,6 +229,7 @@ export class PaymentService {
     }
 
     // Capture payment if it is authorized but not yet captured
+    let capturedOnGateway = gatewayPayment.status === "captured";
     if (gatewayPayment.status === "authorized") {
       try {
         gatewayPayment = await this.razorpay.payments.capture(
@@ -225,6 +237,7 @@ export class PaymentService {
           payment.amount,
           payment.currency,
         );
+        capturedOnGateway = true;
       } catch (err) {
         throw new AppError(
           500,
@@ -235,7 +248,7 @@ export class PaymentService {
       }
     }
 
-    if (gatewayPayment.status !== "captured") {
+    if (!capturedOnGateway && gatewayPayment.status !== "captured") {
       throw new AppError(
         400,
         "PAYMENT_NOT_CAPTURED",
@@ -243,64 +256,101 @@ export class PaymentService {
       );
     }
 
-    // 3. Robustness check: Ensure company is not suspended
-    if (payment.job.company?.status === "SUSPENDED") {
-      throw new ForbiddenError("This company is suspended");
-    }
+    try {
+      // 3. Robustness check: Ensure company is not suspended
+      if (payment.job.company?.status === "SUSPENDED") {
+        throw new ForbiddenError("This company is suspended");
+      }
 
-    // 4. Check duplicate application again
-    const existing = await this.db.application.findUnique({
-      where: {
-        jobId_userId: { jobId: payment.jobId, userId: payment.userId },
-      },
-    });
-
-    if (existing) {
-      throw new ConflictError("You have already applied to this job");
-    }
-
-    const skills = JSON.parse(payment.skillsJson);
-
-    // 5. Complete payment and create application atomically
-    return this.db.$transaction(async (tx) => {
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: "COMPLETED",
-          gatewayPaymentId,
-          gatewaySignature,
+      // 4. Check duplicate application again
+      const existing = await this.db.application.findUnique({
+        where: {
+          jobId_userId: { jobId: payment.jobId, userId: payment.userId },
         },
       });
 
-      return tx.application.create({
-        data: {
-          jobId: payment.jobId,
-          userId: payment.userId,
-          candidateSkills: {
-            create: skills.map((s) => ({
-              skill: s.skill.trim(),
-              skillKey: s.skill.trim().toLocaleLowerCase("en-IN"),
-              level: s.level,
-            })),
+      if (existing) {
+        throw new ConflictError("You have already applied to this job");
+      }
+
+      const skills = JSON.parse(payment.skillsJson);
+
+      // 5. Complete payment and create application atomically
+      return await this.db.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: "COMPLETED",
+            gatewayPaymentId,
+            gatewaySignature,
           },
-        },
-        select: {
-          id: true,
-          jobId: true,
-          userId: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          candidateSkills: {
-            select: {
-              id: true,
-              skill: true,
-              level: true,
+        });
+
+        return await tx.application.create({
+          data: {
+            jobId: payment.jobId,
+            userId: payment.userId,
+            candidateSkills: {
+              create: skills.map((s) => ({
+                skill: s.skill.trim(),
+                skillKey: s.skill.trim().toLocaleLowerCase("en-IN"),
+                level: s.level,
+              })),
             },
           },
+          select: {
+            id: true,
+            jobId: true,
+            userId: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            candidateSkills: {
+              select: {
+                id: true,
+                skill: true,
+                level: true,
+              },
+            },
+          },
+        });
+      });
+    } catch (err) {
+      let refundError = null;
+      let gatewayRefund = null;
+
+      try {
+        gatewayRefund = await this.razorpay.refunds.create({
+          payment_id: gatewayPaymentId,
+          amount: payment.amount,
+        });
+      } catch (refErr) {
+        try {
+          gatewayRefund = await this.razorpay.payments.refund(
+            gatewayPaymentId,
+            { amount: payment.amount },
+          );
+        } catch (fallbackRefErr) {
+          refundError = refErr.message || fallbackRefErr.message;
+        }
+      }
+
+      const failureReason = `Application creation failed: ${err.message}.${refundError ? ` Auto-refund failed: ${refundError}` : ""}`;
+
+      await this.db.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: "FAILED",
+          gatewayPaymentId,
+          gatewaySignature,
+          failureReason,
+          gatewayRefundId: gatewayRefund?.id || null,
+          refundedAt: gatewayRefund ? new Date() : null,
         },
       });
-    });
+
+      throw err;
+    }
   }
 
   async getReceipt(userId, paymentId) {
@@ -522,6 +572,7 @@ export class PaymentService {
               dbAmount: dbPay.amount,
               gatewayStatus: null,
               gatewayAmount: null,
+              failureReason: dbPay.failureReason || null,
             },
           });
         }
@@ -556,6 +607,7 @@ export class PaymentService {
             dbAmount: dbPay.amount,
             gatewayStatus: rzpPay.status,
             gatewayAmount: rzpPay.amount,
+            failureReason: dbPay.failureReason || null,
           },
         });
       } else {
@@ -576,6 +628,7 @@ export class PaymentService {
             dbAmount: null,
             gatewayStatus: rzpPay.status,
             gatewayAmount: rzpPay.amount,
+            failureReason: null,
           },
         });
       }
@@ -647,7 +700,12 @@ export class PaymentService {
         ) {
           await this.db.payment.update({
             where: { id: payment.id },
-            data: { status: "FAILED" },
+            data: {
+              status: "FAILED",
+              gatewayPaymentId,
+              gatewaySignature: signature,
+              failureReason: "Webhook payment amount or currency mismatch",
+            },
           });
           throw new AppError(
             400,
@@ -656,48 +714,86 @@ export class PaymentService {
           );
         }
 
-        // Safety checks
-        if (payment.job.company?.status === "SUSPENDED") {
-          throw new ForbiddenError("This company is suspended");
-        }
+        try {
+          // Safety checks
+          if (payment.job.company?.status === "SUSPENDED") {
+            throw new ForbiddenError("This company is suspended");
+          }
 
-        const existing = await this.db.application.findUnique({
-          where: {
-            jobId_userId: { jobId: payment.jobId, userId: payment.userId },
-          },
-        });
+          const existing = await this.db.application.findUnique({
+            where: {
+              jobId_userId: { jobId: payment.jobId, userId: payment.userId },
+            },
+          });
 
-        if (existing) {
-          throw new ConflictError("You have already applied to this job");
-        }
+          if (existing) {
+            throw new ConflictError("You have already applied to this job");
+          }
 
-        const skills = JSON.parse(payment.skillsJson);
+          const skills = JSON.parse(payment.skillsJson);
 
-        // Complete payment and create application atomically
-        await this.db.$transaction(async (tx) => {
-          await tx.payment.update({
+          // Complete payment and create application atomically
+          await this.db.$transaction(async (tx) => {
+            await tx.payment.update({
+              where: { id: payment.id },
+              data: {
+                status: "COMPLETED",
+                gatewayPaymentId,
+                gatewaySignature: signature,
+              },
+            });
+
+            await tx.application.create({
+              data: {
+                jobId: payment.jobId,
+                userId: payment.userId,
+                candidateSkills: {
+                  create: skills.map((s) => ({
+                    skill: s.skill.trim(),
+                    skillKey: s.skill.trim().toLocaleLowerCase("en-IN"),
+                    level: s.level,
+                  })),
+                },
+              },
+            });
+          });
+        } catch (err) {
+          // Webhook capture failed at business logic or db level, but payment was captured on Razorpay
+          let refundError = null;
+          let gatewayRefund = null;
+
+          try {
+            gatewayRefund = await this.razorpay.refunds.create({
+              payment_id: gatewayPaymentId,
+              amount: payment.amount,
+            });
+          } catch (refErr) {
+            try {
+              gatewayRefund = await this.razorpay.payments.refund(
+                gatewayPaymentId,
+                { amount: payment.amount },
+              );
+            } catch (fallbackRefErr) {
+              refundError = refErr.message || fallbackRefErr.message;
+            }
+          }
+
+          const failureReason = `Webhook processing failed: ${err.message}.${refundError ? ` Auto-refund failed: ${refundError}` : ""}`;
+
+          await this.db.payment.update({
             where: { id: payment.id },
             data: {
-              status: "COMPLETED",
+              status: "FAILED",
               gatewayPaymentId,
               gatewaySignature: signature,
+              failureReason,
+              gatewayRefundId: gatewayRefund?.id || null,
+              refundedAt: gatewayRefund ? new Date() : null,
             },
           });
 
-          await tx.application.create({
-            data: {
-              jobId: payment.jobId,
-              userId: payment.userId,
-              candidateSkills: {
-                create: skills.map((s) => ({
-                  skill: s.skill.trim(),
-                  skillKey: s.skill.trim().toLocaleLowerCase("en-IN"),
-                  level: s.level,
-                })),
-              },
-            },
-          });
-        });
+          throw err;
+        }
       }
     } else if (event === "payment.failed") {
       const entity = eventObj.payload?.payment?.entity;
@@ -709,9 +805,13 @@ export class PaymentService {
       });
 
       if (payment && payment.status === "PENDING") {
+        const failureReason = entity.error_description || entity.error_code || "Payment failed on gateway";
         await this.db.payment.update({
           where: { id: payment.id },
-          data: { status: "FAILED" },
+          data: {
+            status: "FAILED",
+            failureReason,
+          },
         });
       }
     }

@@ -713,4 +713,259 @@ describe("Payments API", () => {
     expect(types).toContain("MISSING_ON_GATEWAY");
     expect(types).toContain("MISSING_IN_DB");
   });
+
+  it("POST /api/v1/payments/verify — auto-refunds and sets payment to FAILED if company is suspended", async () => {
+    const db = createFakeDb();
+    const suspendedPayment = {
+      ...fakePayment,
+      job: {
+        ...fakeJob,
+        company: { status: "SUSPENDED" },
+      },
+    };
+    db.payment.findUnique.mockResolvedValue(suspendedPayment);
+    db.payment.update.mockResolvedValue({ ...suspendedPayment, status: "FAILED" });
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const gatewayOrderId = "order_fake123";
+    const gatewayPaymentId = "pay_fake123";
+    const gatewaySignature = crypto
+      .createHmac("sha256", config.RAZORPAY_KEY_SECRET)
+      .update(`${gatewayOrderId}|${gatewayPaymentId}`)
+      .digest("hex");
+
+    const authHeaders = await getAuthHeaders(app);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/payments/verify",
+      headers: authHeaders,
+      payload: {
+        gatewayOrderId,
+        gatewayPaymentId,
+        gatewaySignature,
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(mockRefundsCreate).toHaveBeenCalledWith({
+      payment_id: "pay_fake123",
+      amount: 10000,
+    });
+    expect(db.payment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "FAILED",
+          failureReason: expect.stringContaining("This company is suspended"),
+        }),
+      }),
+    );
+  });
+
+  it("POST /api/v1/payments/verify — auto-refunds and sets payment to FAILED if application already exists", async () => {
+    const db = createFakeDb();
+    db.payment.findUnique.mockResolvedValue(fakePayment);
+    db.application.findUnique.mockResolvedValue(fakeApplication);
+    db.payment.update.mockResolvedValue({ ...fakePayment, status: "FAILED" });
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const gatewayOrderId = "order_fake123";
+    const gatewayPaymentId = "pay_fake123";
+    const gatewaySignature = crypto
+      .createHmac("sha256", config.RAZORPAY_KEY_SECRET)
+      .update(`${gatewayOrderId}|${gatewayPaymentId}`)
+      .digest("hex");
+
+    const authHeaders = await getAuthHeaders(app);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/payments/verify",
+      headers: authHeaders,
+      payload: {
+        gatewayOrderId,
+        gatewayPaymentId,
+        gatewaySignature,
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(mockRefundsCreate).toHaveBeenCalledWith({
+      payment_id: "pay_fake123",
+      amount: 10000,
+    });
+    expect(db.payment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "FAILED",
+          failureReason: expect.stringContaining("You have already applied to this job"),
+        }),
+      }),
+    );
+  });
+
+  it("POST /api/v1/payments/webhook — auto-refunds and sets payment to FAILED on payment.captured if company is suspended", async () => {
+    const db = createFakeDb();
+    const suspendedPayment = {
+      ...fakePayment,
+      job: {
+        ...fakeJob,
+        company: { status: "SUSPENDED" },
+      },
+    };
+    db.payment.findUnique.mockResolvedValue(suspendedPayment);
+    db.payment.update.mockResolvedValue({ ...suspendedPayment, status: "FAILED" });
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const webhookPayload = {
+      event: "payment.captured",
+      payload: {
+        payment: {
+          entity: {
+            id: "pay_fake123",
+            order_id: "order_fake123",
+            amount: 10000,
+            currency: "INR",
+            status: "captured",
+          },
+        },
+      },
+    };
+
+    const signature = crypto
+      .createHmac("sha256", "fakeWebhookSecret1234567890")
+      .update(JSON.stringify(webhookPayload))
+      .digest("hex");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/payments/webhook",
+      headers: {
+        "x-razorpay-signature": signature,
+      },
+      payload: webhookPayload,
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(mockRefundsCreate).toHaveBeenCalledWith({
+      payment_id: "pay_fake123",
+      amount: 10000,
+    });
+    expect(db.payment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "FAILED",
+          failureReason: expect.stringContaining("This company is suspended"),
+        }),
+      }),
+    );
+  });
+
+  it("POST /api/v1/payments/webhook — auto-refunds and sets payment to FAILED on payment.captured if application already exists", async () => {
+    const db = createFakeDb();
+    db.payment.findUnique.mockResolvedValue(fakePayment);
+    db.application.findUnique.mockResolvedValue(fakeApplication);
+    db.payment.update.mockResolvedValue({ ...fakePayment, status: "FAILED" });
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const webhookPayload = {
+      event: "payment.captured",
+      payload: {
+        payment: {
+          entity: {
+            id: "pay_fake123",
+            order_id: "order_fake123",
+            amount: 10000,
+            currency: "INR",
+            status: "captured",
+          },
+        },
+      },
+    };
+
+    const signature = crypto
+      .createHmac("sha256", "fakeWebhookSecret1234567890")
+      .update(JSON.stringify(webhookPayload))
+      .digest("hex");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/payments/webhook",
+      headers: {
+        "x-razorpay-signature": signature,
+      },
+      payload: webhookPayload,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(mockRefundsCreate).toHaveBeenCalledWith({
+      payment_id: "pay_fake123",
+      amount: 10000,
+    });
+    expect(db.payment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "FAILED",
+          failureReason: expect.stringContaining("You have already applied to this job"),
+        }),
+      }),
+    );
+  });
+
+  it("POST /api/v1/payments/webhook — processes payment.failed event and records failure reason", async () => {
+    const db = createFakeDb();
+    db.payment.findUnique.mockResolvedValue(fakePayment);
+    db.payment.update.mockResolvedValue({ ...fakePayment, status: "FAILED" });
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const webhookPayload = {
+      event: "payment.failed",
+      payload: {
+        payment: {
+          entity: {
+            id: "pay_fake123",
+            order_id: "order_fake123",
+            amount: 10000,
+            currency: "INR",
+            status: "failed",
+            error_code: "BAD_REQUEST_ERROR",
+            error_description: "Card got declined by issuing bank",
+          },
+        },
+      },
+    };
+
+    const signature = crypto
+      .createHmac("sha256", "fakeWebhookSecret1234567890")
+      .update(JSON.stringify(webhookPayload))
+      .digest("hex");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/payments/webhook",
+      headers: {
+        "x-razorpay-signature": signature,
+      },
+      payload: webhookPayload,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().received).toBe(true);
+    expect(db.payment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "FAILED",
+          failureReason: "Card got declined by issuing bank",
+        }),
+      }),
+    );
+  });
 });
