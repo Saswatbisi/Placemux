@@ -818,4 +818,191 @@ export class PaymentService {
 
     return { received: true };
   }
+
+  async getRevenueDashboard(userId, query) {
+    const { companyId, startDate, endDate } = query;
+
+    if (companyId) {
+      // 1. Verify company exists and user is a member
+      const membership = await this.db.companyMembership.findUnique({
+        where: {
+          userId_companyId: { userId, companyId },
+        },
+        select: {
+          role: true,
+          company: {
+            select: { status: true },
+          },
+        },
+      });
+
+      if (!membership) {
+        throw new NotFoundError("Company not found");
+      }
+
+      if (membership.company?.status === "SUSPENDED") {
+        throw new ForbiddenError("This company is suspended");
+      }
+    }
+
+    // 2. Build where filter for payments
+    const where = {};
+    if (companyId) {
+      where.job = { companyId };
+    }
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setUTCHours(0, 0, 0, 0);
+        where.createdAt.gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setUTCHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
+    }
+
+    // 3. Fetch matching payments
+    const payments = await this.db.payment.findMany({
+      where,
+      include: {
+        job: {
+          select: {
+            id: true,
+            title: true,
+            company: {
+              select: {
+                id: true,
+                displayName: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    // 4. Calculate metrics
+    let totalRevenue = 0;
+    let totalRefunded = 0;
+    let totalTransactions = payments.length;
+    let completedCount = 0;
+    let refundedCount = 0;
+    let failedCount = 0;
+    let pendingCount = 0;
+
+    const jobMap = new Map();
+    const dailyMap = new Map();
+
+    for (const p of payments) {
+      if (p.status === "COMPLETED") {
+        totalRevenue += p.amount;
+        completedCount++;
+      } else if (p.status === "REFUNDED") {
+        totalRefunded += p.amount;
+        refundedCount++;
+      } else if (p.status === "FAILED") {
+        failedCount++;
+      } else if (p.status === "PENDING") {
+        pendingCount++;
+      }
+
+      // Aggregate by Job
+      const jobId = p.jobId;
+      if (!jobMap.has(jobId)) {
+        jobMap.set(jobId, {
+          jobId,
+          title: p.job.title,
+          companyName: p.job.company.displayName,
+          totalRevenue: 0,
+          totalRefunded: 0,
+          netRevenue: 0,
+          applicationCount: 0,
+        });
+      }
+      const jobStats = jobMap.get(jobId);
+      if (p.status === "COMPLETED") {
+        jobStats.totalRevenue += p.amount;
+        jobStats.netRevenue += p.amount;
+        jobStats.applicationCount++;
+      } else if (p.status === "REFUNDED") {
+        jobStats.totalRefunded += p.amount;
+        jobStats.netRevenue -= p.amount;
+      }
+
+      // Populate dailyMap with activity
+      const dateStr = p.createdAt.toISOString().slice(0, 10);
+      if (!dailyMap.has(dateStr)) {
+        dailyMap.set(dateStr, {
+          revenue: 0,
+          refunds: 0,
+          netRevenue: 0,
+          transactionCount: 0,
+        });
+      }
+      const dailyStats = dailyMap.get(dateStr);
+      dailyStats.transactionCount++;
+      if (p.status === "COMPLETED") {
+        dailyStats.revenue += p.amount;
+        dailyStats.netRevenue += p.amount;
+      } else if (p.status === "REFUNDED") {
+        dailyStats.refunds += p.amount;
+        dailyStats.netRevenue -= p.amount;
+      }
+    }
+
+    // Generate full timeline for daily trends (fills quiet days with 0s)
+    let datesInRange = [];
+    const defaultStartDate = new Date();
+    defaultStartDate.setDate(defaultStartDate.getDate() - 29); // 30 days ago
+    
+    const start = startDate ? new Date(startDate) : (payments.length > 0 ? payments[0].createdAt : defaultStartDate);
+    const end = endDate ? new Date(endDate) : new Date();
+
+    const current = new Date(start);
+    current.setUTCHours(12, 0, 0, 0);
+    const limit = new Date(end);
+    limit.setUTCHours(12, 0, 0, 0);
+
+    while (current <= limit) {
+      datesInRange.push(current.toISOString().slice(0, 10));
+      current.setUTCDate(current.getUTCDate() + 1);
+    }
+
+    const dailyTrends = datesInRange.map((dateStr) => {
+      const stats = dailyMap.get(dateStr) || {
+        revenue: 0,
+        refunds: 0,
+        netRevenue: 0,
+        transactionCount: 0,
+      };
+      return {
+        date: dateStr,
+        ...stats,
+      };
+    });
+
+    const jobBreakdown = Array.from(jobMap.values()).sort(
+      (a, b) => b.netRevenue - a.netRevenue,
+    );
+
+    return {
+      summary: {
+        totalRevenue,
+        totalRefunded,
+        netRevenue: totalRevenue - totalRefunded,
+        totalTransactions,
+        completedCount,
+        refundedCount,
+        failedCount,
+        pendingCount,
+      },
+      jobBreakdown,
+      dailyTrends,
+    };
+  }
 }

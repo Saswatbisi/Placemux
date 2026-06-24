@@ -968,4 +968,180 @@ describe("Payments API", () => {
       }),
     );
   });
+
+  // ===== REVENUE DASHBOARD =====
+
+  it("GET /api/v1/payments/dashboard — calculates platform-wide dashboard metrics correctly", async () => {
+    const db = createFakeDb();
+    db.payment.findMany = vi.fn().mockResolvedValue([
+      {
+        id: "pay_1",
+        userId: fakeUser.id,
+        jobId: "job_1",
+        amount: 10000,
+        currency: "INR",
+        status: "COMPLETED",
+        createdAt: new Date("2026-06-01T10:00:00Z"),
+        job: {
+          id: "job_1",
+          title: "React Developer",
+          company: { id: "company_1", displayName: "Acme Corp" },
+        },
+      },
+      {
+        id: "pay_2",
+        userId: fakeUser.id,
+        jobId: "job_2",
+        amount: 10000,
+        currency: "INR",
+        status: "REFUNDED",
+        createdAt: new Date("2026-06-02T10:00:00Z"),
+        job: {
+          id: "job_2",
+          title: "Node Developer",
+          company: { id: "company_1", displayName: "Acme Corp" },
+        },
+      },
+      {
+        id: "pay_3",
+        userId: fakeUser.id,
+        jobId: "job_1",
+        amount: 10000,
+        currency: "INR",
+        status: "FAILED",
+        createdAt: new Date("2026-06-02T11:00:00Z"),
+        job: {
+          id: "job_1",
+          title: "React Developer",
+          company: { id: "company_1", displayName: "Acme Corp" },
+        },
+      },
+    ]);
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const authHeaders = await getAuthHeaders(app);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/payments/dashboard?startDate=2026-06-01&endDate=2026-06-03",
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.summary.totalRevenue).toBe(10000);
+    expect(body.data.summary.totalRefunded).toBe(10000);
+    expect(body.data.summary.netRevenue).toBe(0);
+    expect(body.data.summary.totalTransactions).toBe(3);
+    expect(body.data.summary.completedCount).toBe(1);
+    expect(body.data.summary.refundedCount).toBe(1);
+    expect(body.data.summary.failedCount).toBe(1);
+    expect(body.data.dailyTrends).toHaveLength(3); // 2026-06-01, 2026-06-02, 2026-06-03
+    expect(body.data.dailyTrends[0].date).toBe("2026-06-01");
+    expect(body.data.dailyTrends[0].revenue).toBe(10000);
+    expect(body.data.dailyTrends[1].date).toBe("2026-06-02");
+    expect(body.data.dailyTrends[1].refunds).toBe(10000);
+    expect(body.data.dailyTrends[2].date).toBe("2026-06-03");
+    expect(body.data.dailyTrends[2].revenue).toBe(0);
+    expect(body.data.dailyTrends[2].transactionCount).toBe(0);
+  });
+
+  it("GET /api/v1/payments/dashboard — retrieves company-specific metrics for authorized member", async () => {
+    const db = createFakeDb();
+    db.companyMembership = {
+      findUnique: vi.fn().mockResolvedValue({
+        role: "ADMIN",
+        company: { status: "ACTIVE" },
+      }),
+    };
+    db.payment.findMany = vi.fn().mockResolvedValue([
+      {
+        id: "pay_1",
+        userId: fakeUser.id,
+        jobId: "job_1",
+        amount: 10000,
+        currency: "INR",
+        status: "COMPLETED",
+        createdAt: new Date("2026-06-01T10:00:00Z"),
+        job: {
+          id: "job_1",
+          title: "React Developer",
+          company: { id: "company_1", displayName: "Acme Corp" },
+        },
+      },
+    ]);
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const authHeaders = await getAuthHeaders(app);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/payments/dashboard?companyId=685400000000000000000002",
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(db.companyMembership.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId_companyId: {
+            userId: fakeUser.id,
+            companyId: "685400000000000000000002",
+          },
+        },
+      }),
+    );
+    expect(db.payment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          job: { companyId: "685400000000000000000002" },
+        }),
+      }),
+    );
+  });
+
+  it("GET /api/v1/payments/dashboard — rejects if user is not a member of the company", async () => {
+    const db = createFakeDb();
+    db.companyMembership = {
+      findUnique: vi.fn().mockResolvedValue(null),
+    };
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const authHeaders = await getAuthHeaders(app);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/payments/dashboard?companyId=685400000000000000000002",
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.message).toContain("Company not found");
+  });
+
+  it("GET /api/v1/payments/dashboard — rejects if company is suspended", async () => {
+    const db = createFakeDb();
+    db.companyMembership = {
+      findUnique: vi.fn().mockResolvedValue({
+        role: "OWNER",
+        company: { status: "SUSPENDED" },
+      }),
+    };
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const authHeaders = await getAuthHeaders(app);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/payments/dashboard?companyId=685400000000000000000002",
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.message).toContain("suspended");
+  });
 });

@@ -3,6 +3,7 @@ import {
   verifyPaymentSchema,
   paymentIdParamsSchema,
   reconciliationQuerySchema,
+  dashboardQuerySchema,
 } from "./payment.schemas.js";
 import { PaymentService } from "./payment.service.js";
 
@@ -58,6 +59,16 @@ export function paymentRoutes(db, razorpayClient = null) {
     app.get("/reconciliation", async (request) => {
       const query = reconciliationQuerySchema.parse(request.query);
       const result = await service.reconcilePayments(query.date);
+      return { data: result };
+    });
+
+    // GET /api/v1/payments/dashboard
+    app.get("/dashboard", async (request) => {
+      const query = dashboardQuerySchema.parse(request.query);
+      const result = await service.getRevenueDashboard(
+        request.user.userId,
+        query,
+      );
       return { data: result };
     });
 
