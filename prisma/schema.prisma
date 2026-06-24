@@ -236,6 +236,7 @@ model Application {
   job             Job                @relation(fields: [jobId], references: [id], onDelete: Cascade)
   user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   candidateSkills CandidateSkill[]
+  offer           Offer?
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 
@@ -277,3 +278,31 @@ model Payment {
 
   @@map("payments")
 }
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+model Offer {
+  id                String      @id @default(auto()) @map("_id") @db.ObjectId
+  applicationId     String      @unique @map("application_id") @db.ObjectId
+  application       Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  salary            Int         // In INR (annual CTC)
+  startDate         DateTime    @map("start_date")
+  probationPeriod   Int         @default(3) @map("probation_period") // in months
+  status            OfferStatus @default(PENDING)
+  esignApproach     String?     @map("esign_approach") // "CRYPTOGRAPHIC" or "THIRD_PARTY"
+  signature         String?
+  signatureHash     String?     @map("signature_hash")
+  candidateSignedAt DateTime?  @map("candidate_signed_at")
+  candidateSignedIp String?    @map("candidate_signed_ip")
+  providerTxId      String?     @map("provider_tx_id") // doc_xxxx
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  @@map("offers")
+}
+

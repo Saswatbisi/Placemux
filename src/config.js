@@ -24,6 +24,10 @@ const configSchema = z.object({
     .string()
     .optional()
     .default("fakeWebhookSecret1234567890"),
+  OFFER_SIGNING_SECRET: z
+    .string()
+    .min(32, "OFFER_SIGNING_SECRET must contain at least 32 characters")
+    .default("esign-secret-key-for-placemux-offers-security"),
 });
 
 export const config = configSchema.parse(process.env);
