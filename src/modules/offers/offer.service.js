@@ -33,12 +33,21 @@ export class OfferService {
       throw new ForbiddenError("This company is suspended");
     }
     if (allowedRoles && !allowedRoles.includes(membership.role)) {
-      throw new ForbiddenError("You do not have permission to perform this action");
+      throw new ForbiddenError(
+        "You do not have permission to perform this action",
+      );
     }
     return membership;
   }
 
-  computeSignatureHash(offerId, applicationId, salary, startDate, probationPeriod, signature) {
+  computeSignatureHash(
+    offerId,
+    applicationId,
+    salary,
+    startDate,
+    probationPeriod,
+    signature,
+  ) {
     const data = JSON.stringify({
       offerId,
       applicationId,
@@ -72,39 +81,53 @@ export class OfferService {
     });
 
     if (existingOffer) {
-      throw new ConflictError("An offer has already been generated for this application");
+      throw new ConflictError(
+        "An offer has already been generated for this application",
+      );
     }
 
-    // 4. Create offer
-    return this.db.offer.create({
-      data: {
-        applicationId,
-        salary: input.salary,
-        startDate: new Date(input.startDate),
-        probationPeriod: input.probationPeriod ?? 3,
-        status: "PENDING",
-      },
-      include: {
-        application: {
-          select: {
-            id: true,
-            status: true,
-            job: {
-              select: {
-                id: true,
-                title: true,
+    // 4. Create offer and update status record in transaction
+    return this.db.$transaction(async (tx) => {
+      const offer = await tx.offer.create({
+        data: {
+          applicationId,
+          salary: input.salary,
+          startDate: new Date(input.startDate),
+          probationPeriod: input.probationPeriod ?? 3,
+          status: "PENDING",
+        },
+        include: {
+          application: {
+            select: {
+              id: true,
+              status: true,
+              job: {
+                select: {
+                  id: true,
+                  title: true,
+                },
               },
-            },
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
               },
             },
           },
         },
-      },
+      });
+
+      if (tx.applicationStatusRecord) {
+        await tx.applicationStatusRecord.upsert({
+          where: { applicationId },
+          create: { applicationId, status: "OFFER_GENERATED" },
+          update: { status: "OFFER_GENERATED" },
+        });
+      }
+
+      return offer;
     });
   }
 
@@ -176,7 +199,11 @@ export class OfferService {
     }
 
     if (offer.status !== "PENDING") {
-      throw new AppError(400, "INVALID_OFFER_STATUS", `Only pending offers can be signed. Current status: ${offer.status}`);
+      throw new AppError(
+        400,
+        "INVALID_OFFER_STATUS",
+        `Only pending offers can be signed. Current status: ${offer.status}`,
+      );
     }
 
     // 4. Sign and accept
@@ -196,16 +223,31 @@ export class OfferService {
         offer.salary,
         offer.startDate,
         offer.probationPeriod,
-        input.signature
+        input.signature,
       );
     } else if (esignApproach === "THIRD_PARTY") {
       const providerTxId = `doc_docusign_${crypto.randomBytes(8).toString("hex")}`;
       updateData.providerTxId = providerTxId;
     }
 
-    return this.db.offer.update({
-      where: { id: offerId },
-      data: updateData,
+    return this.db.$transaction(async (tx) => {
+      const updatedOffer = await tx.offer.update({
+        where: { id: offerId },
+        data: updateData,
+      });
+
+      if (tx.applicationStatusRecord) {
+        await tx.applicationStatusRecord.upsert({
+          where: { applicationId: offer.applicationId },
+          create: {
+            applicationId: offer.applicationId,
+            status: "OFFER_ACCEPTED",
+          },
+          update: { status: "OFFER_ACCEPTED" },
+        });
+      }
+
+      return updatedOffer;
     });
   }
 
@@ -237,7 +279,8 @@ export class OfferService {
         valid: true,
         esignApproach: "THIRD_PARTY",
         providerTxId: offer.providerTxId,
-        message: "Authenticity verified via third-party provider transaction ledger",
+        message:
+          "Authenticity verified via third-party provider transaction ledger",
       };
     }
 
@@ -245,7 +288,8 @@ export class OfferService {
       if (!offer.signature || !offer.signatureHash) {
         return {
           valid: false,
-          reason: "Offer is missing signature name or signature hash in database",
+          reason:
+            "Offer is missing signature name or signature hash in database",
         };
       }
 
@@ -256,14 +300,15 @@ export class OfferService {
         offer.salary,
         offer.startDate,
         offer.probationPeriod,
-        offer.signature
+        offer.signature,
       );
 
       if (computed !== offer.signatureHash) {
         return {
           valid: false,
           tampered: true,
-          reason: "Cryptographic signature validation failed. The offer content has been tampered with or modified.",
+          reason:
+            "Cryptographic signature validation failed. The offer content has been tampered with or modified.",
         };
       }
 
@@ -273,7 +318,8 @@ export class OfferService {
         signature: offer.signature,
         signedAt: offer.candidateSignedAt,
         signedIp: offer.candidateSignedIp,
-        message: "Authenticity verified. Cryptographic signature is valid and untampered.",
+        message:
+          "Authenticity verified. Cryptographic signature is valid and untampered.",
       };
     }
 

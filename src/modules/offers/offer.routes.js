@@ -30,15 +30,11 @@ export function offerRoutes(db) {
     );
 
     // GET /api/v1/offers/:id
-    app.get(
-      "/offers/:id",
-      { onRequest: app.authenticate },
-      async (request) => {
-        const { id } = offerIdParamsSchema.parse(request.params);
-        const offer = await service.getOffer(request.user.userId, id);
-        return { data: offer };
-      },
-    );
+    app.get("/offers/:id", { onRequest: app.authenticate }, async (request) => {
+      const { id } = offerIdParamsSchema.parse(request.params);
+      const offer = await service.getOffer(request.user.userId, id);
+      return { data: offer };
+    });
 
     // POST /api/v1/offers/:id/sign
     app.post(

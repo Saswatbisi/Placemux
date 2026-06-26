@@ -85,5 +85,15 @@ export function applicationRoutes(db) {
         return { data: application };
       },
     );
+
+    // GET /api/v1/applications/:id/status (Fetch unified status tracking)
+    app.get("/applications/:id/status", async (request) => {
+      const { id } = applicationIdParamsSchema.parse(request.params);
+      const statusRecord = await service.getApplicationStatus(
+        id,
+        request.user.userId,
+      );
+      return { data: statusRecord };
+    });
   };
 }

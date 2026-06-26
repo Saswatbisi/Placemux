@@ -8,18 +8,19 @@ Stabilizes backend payments end-to-end and implements a comprehensive Revenue Da
 
 ## Modified Files
 
-| File | Change |
-| --- | --- |
-| `src/modules/payments/payment.schemas.js` | Defined and registered `dashboardQuerySchema` for validating dashboard query filters (`companyId`, `startDate`, `endDate`). |
+| File                                      | Change                                                                                                                                                                                                                                 |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/payments/payment.schemas.js` | Defined and registered `dashboardQuerySchema` for validating dashboard query filters (`companyId`, `startDate`, `endDate`).                                                                                                            |
 | `src/modules/payments/payment.service.js` | Implemented the core business logic `getRevenueDashboard` that validates company memberships, aggregates payment statuses/amounts, maps revenue breakdowns per job, and generates day-by-day contiguous timelines of revenue activity. |
-| `src/modules/payments/payment.routes.js` | Registered the `GET /dashboard` endpoint, positioning it before parameterized ID routes to avoid routing/matching conflicts. |
-| `tests/payment.test.js` | Appended 4 integration test cases covering platform-wide dashboard calculation, company-specific access controls, validation checks, and date range filters. |
+| `src/modules/payments/payment.routes.js`  | Registered the `GET /dashboard` endpoint, positioning it before parameterized ID routes to avoid routing/matching conflicts.                                                                                                           |
+| `tests/payment.test.js`                   | Appended 4 integration test cases covering platform-wide dashboard calculation, company-specific access controls, validation checks, and date range filters.                                                                           |
 
 ---
 
 ## API Endpoints
 
 ### 📊 1. Revenue Dashboard / Analytics
+
 #### `GET /api/v1/payments/dashboard`
 
 Retrieves a detailed aggregation of payments data for monetization audits.
@@ -32,6 +33,7 @@ Retrieves a detailed aggregation of payments data for monetization audits.
 - **Authentication**: JWT access token required (passed in the `Authorization: Bearer <token>` header).
 
 **Response (200 OK):**
+
 ```json
 {
   "data": {

@@ -6,10 +6,16 @@ const objectIdSchema = z
 
 export const createInterviewSchema = z
   .object({
-    title: z.string().trim().min(1, "Title must be at least 1 character").max(100, "Title is too long"),
+    title: z
+      .string()
+      .trim()
+      .min(1, "Title must be at least 1 character")
+      .max(100, "Title is too long"),
     scheduledAt: z
       .string()
-      .datetime({ message: "Scheduled time must be a valid ISO datetime string" })
+      .datetime({
+        message: "Scheduled time must be a valid ISO datetime string",
+      })
       .refine((val) => new Date(val) > new Date(), {
         message: "Scheduled time must be in the future",
       }),
@@ -37,10 +43,17 @@ export const createInterviewSchema = z
 
 export const updateInterviewSchema = z
   .object({
-    title: z.string().trim().min(1, "Title must be at least 1 character").max(100).optional(),
+    title: z
+      .string()
+      .trim()
+      .min(1, "Title must be at least 1 character")
+      .max(100)
+      .optional(),
     scheduledAt: z
       .string()
-      .datetime({ message: "Scheduled time must be a valid ISO datetime string" })
+      .datetime({
+        message: "Scheduled time must be a valid ISO datetime string",
+      })
       .refine((val) => new Date(val) > new Date(), {
         message: "Scheduled time must be in the future",
       })
@@ -56,16 +69,8 @@ export const updateInterviewSchema = z
       .optional()
       .nullable()
       .or(z.literal("")),
-    interviewerName: z
-      .string()
-      .trim()
-      .min(1)
-      .max(100)
-      .optional()
-      .nullable(),
-    status: z
-      .enum(["SCHEDULED", "COMPLETED", "CANCELLED"])
-      .optional(),
+    interviewerName: z.string().trim().min(1).max(100).optional().nullable(),
+    status: z.enum(["SCHEDULED", "COMPLETED", "CANCELLED"]).optional(),
   })
   .strict();
 

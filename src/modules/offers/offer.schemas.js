@@ -25,7 +25,11 @@ export const createOfferSchema = z
 export const signOfferSchema = z
   .object({
     esignApproach: z.enum(["CRYPTOGRAPHIC", "THIRD_PARTY"]),
-    signature: z.string().trim().min(2, "Signature must be at least 2 characters").optional(),
+    signature: z
+      .string()
+      .trim()
+      .min(2, "Signature must be at least 2 characters")
+      .optional(),
   })
   .strict()
   .superRefine((data, context) => {

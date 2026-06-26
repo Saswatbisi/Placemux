@@ -8,25 +8,29 @@ Introduces support for issuing completed payment receipts, processing refunds, c
 
 ## Modified Files
 
-| File | Change |
-| --- | --- |
-| `prisma/schema.prisma` | Added `REFUNDED` status to the `PaymentStatus` enum. Extended `Payment` model with `gatewayRefundId` and `refundedAt` fields. |
-| `src/config.js` | Defined `RAZORPAY_WEBHOOK_SECRET` configuration with default testing secrets. |
-| `src/modules/payments/payment.schemas.js` | Added schemas for verifying path parameters (`paymentIdParamsSchema`) and date queries (`reconciliationQuerySchema`). |
+| File                                      | Change                                                                                                                                                                                                                                          |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prisma/schema.prisma`                    | Added `REFUNDED` status to the `PaymentStatus` enum. Extended `Payment` model with `gatewayRefundId` and `refundedAt` fields.                                                                                                                   |
+| `src/config.js`                           | Defined `RAZORPAY_WEBHOOK_SECRET` configuration with default testing secrets.                                                                                                                                                                   |
+| `src/modules/payments/payment.schemas.js` | Added schemas for verifying path parameters (`paymentIdParamsSchema`) and date queries (`reconciliationQuerySchema`).                                                                                                                           |
 | `src/modules/payments/payment.service.js` | Implemented receipt lookup (`getReceipt`), atomic refund processing and application deletion (`refundPayment`), detailed daily gateway alignment checks (`reconcilePayments`), and webhook verification and capture routines (`handleWebhook`). |
-| `src/modules/payments/payment.routes.js` | Registered routes for webhook, reconciliation, receipts, and refunds; updated route hooks to exempt webhooks from JWT authorization checks. |
-| `tests/payment.test.js` | Extended unit mocks for `razorpay` (`refunds.create`, `payments.all`) and implemented 9 new test cases covering all happy and failure paths. |
+| `src/modules/payments/payment.routes.js`  | Registered routes for webhook, reconciliation, receipts, and refunds; updated route hooks to exempt webhooks from JWT authorization checks.                                                                                                     |
+| `tests/payment.test.js`                   | Extended unit mocks for `razorpay` (`refunds.create`, `payments.all`) and implemented 9 new test cases covering all happy and failure paths.                                                                                                    |
 
 ---
 
 ## API Endpoints
 
 ### 🧾 1. Get Payment Receipt
+
 #### `GET /api/v1/payments/:id/receipt`
+
 Retrieves receipt details for a completed payment.
+
 - **Rules**: Must belong to the authenticated calling user and payment status must be `COMPLETED`.
 
 **Response (200 OK):**
+
 ```json
 {
   "data": {
@@ -53,11 +57,15 @@ Retrieves receipt details for a completed payment.
 ---
 
 ### 💸 2. Request Refund
+
 #### `POST /api/v1/payments/:id/refund`
+
 Refunds a payment and cancels the candidate's job application.
+
 - **Rules**: Only completed payments belonging to the authenticated user can be refunded. Updates payment status to `REFUNDED` and deletes the associated `Application` record atomically inside a database transaction.
 
 **Response (200 OK):**
+
 ```json
 {
   "data": {
@@ -79,8 +87,11 @@ Refunds a payment and cancels the candidate's job application.
 ---
 
 ### 🔔 3. Webhook Receiver
+
 #### `POST /api/v1/payments/webhook`
+
 Handles asynchronous payment notifications from Razorpay.
+
 - **Rules**: Exempt from JWT auth. Crypto-verifies webhook headers using `x-razorpay-signature` and `RAZORPAY_WEBHOOK_SECRET`.
   - `payment.captured`: Completes payment and creates the application.
   - `payment.failed`: Marks payment status as `FAILED`.
@@ -88,8 +99,11 @@ Handles asynchronous payment notifications from Razorpay.
 ---
 
 ### 📊 4. Daily Reconciliation Report
+
 #### `GET /api/v1/payments/reconciliation`
+
 Generates a report comparing database records and Razorpay records for a target date.
+
 - **Query Params**: `date` (`YYYY-MM-DD`, optional, defaults to today).
 - **Rules**: Identifies:
   - `MISSING_ON_GATEWAY`: DB record marked completed but missing on gateway.
@@ -98,6 +112,7 @@ Generates a report comparing database records and Razorpay records for a target 
   - `MISSING_IN_DB`: Gateway shows captured payment but DB has no record.
 
 **Response (200 OK):**
+
 ```json
 {
   "data": {

@@ -724,7 +724,10 @@ describe("Payments API", () => {
       },
     };
     db.payment.findUnique.mockResolvedValue(suspendedPayment);
-    db.payment.update.mockResolvedValue({ ...suspendedPayment, status: "FAILED" });
+    db.payment.update.mockResolvedValue({
+      ...suspendedPayment,
+      status: "FAILED",
+    });
 
     const app = await buildApp(db);
     apps.push(app);
@@ -800,7 +803,9 @@ describe("Payments API", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           status: "FAILED",
-          failureReason: expect.stringContaining("You have already applied to this job"),
+          failureReason: expect.stringContaining(
+            "You have already applied to this job",
+          ),
         }),
       }),
     );
@@ -816,7 +821,10 @@ describe("Payments API", () => {
       },
     };
     db.payment.findUnique.mockResolvedValue(suspendedPayment);
-    db.payment.update.mockResolvedValue({ ...suspendedPayment, status: "FAILED" });
+    db.payment.update.mockResolvedValue({
+      ...suspendedPayment,
+      status: "FAILED",
+    });
 
     const app = await buildApp(db);
     apps.push(app);
@@ -912,7 +920,9 @@ describe("Payments API", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           status: "FAILED",
-          failureReason: expect.stringContaining("You have already applied to this job"),
+          failureReason: expect.stringContaining(
+            "You have already applied to this job",
+          ),
         }),
       }),
     );

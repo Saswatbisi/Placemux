@@ -1,7 +1,4 @@
-import {
-  ForbiddenError,
-  NotFoundError,
-} from "../../lib/errors.js";
+import { ForbiddenError, NotFoundError } from "../../lib/errors.js";
 
 export class InterviewService {
   constructor(db) {
@@ -28,14 +25,20 @@ export class InterviewService {
       throw new ForbiddenError("This company is suspended");
     }
     if (allowedRoles && !allowedRoles.includes(membership.role)) {
-      throw new ForbiddenError("You do not have permission to perform this action");
+      throw new ForbiddenError(
+        "You do not have permission to perform this action",
+      );
     }
     return membership;
   }
 
   async scheduleInterview(companyId, userId, applicationId, input) {
     // 1. Verify caller has OWNER, ADMIN, or MEMBER role in the company
-    await this.requireMembership(companyId, userId, ["OWNER", "ADMIN", "MEMBER"]);
+    await this.requireMembership(companyId, userId, [
+      "OWNER",
+      "ADMIN",
+      "MEMBER",
+    ]);
 
     // 2. Fetch the application and make sure it belongs to the company
     const application = await this.db.application.findUnique({
@@ -49,17 +52,29 @@ export class InterviewService {
       throw new NotFoundError("Application not found");
     }
 
-    // 3. Create interview
-    return this.db.interview.create({
-      data: {
-        applicationId,
-        title: input.title,
-        scheduledAt: new Date(input.scheduledAt),
-        duration: input.duration ?? 30,
-        meetingLink: input.meetingLink || null,
-        interviewerName: input.interviewerName || null,
-        status: "SCHEDULED",
-      },
+    // 3. Create interview and update status record in transaction
+    return this.db.$transaction(async (tx) => {
+      const interview = await tx.interview.create({
+        data: {
+          applicationId,
+          title: input.title,
+          scheduledAt: new Date(input.scheduledAt),
+          duration: input.duration ?? 30,
+          meetingLink: input.meetingLink || null,
+          interviewerName: input.interviewerName || null,
+          status: "SCHEDULED",
+        },
+      });
+
+      if (tx.applicationStatusRecord) {
+        await tx.applicationStatusRecord.upsert({
+          where: { applicationId },
+          create: { applicationId, status: "INTERVIEWING" },
+          update: { status: "INTERVIEWING" },
+        });
+      }
+
+      return interview;
     });
   }
 
@@ -147,14 +162,21 @@ export class InterviewService {
     }
 
     // Access control: Only company OWNER, ADMIN, or MEMBER can update/reschedule
-    await this.requireMembership(interview.application.job.companyId, userId, ["OWNER", "ADMIN", "MEMBER"]);
+    await this.requireMembership(interview.application.job.companyId, userId, [
+      "OWNER",
+      "ADMIN",
+      "MEMBER",
+    ]);
 
     const updateData = {};
     if (input.title !== undefined) updateData.title = input.title;
-    if (input.scheduledAt !== undefined) updateData.scheduledAt = new Date(input.scheduledAt);
+    if (input.scheduledAt !== undefined)
+      updateData.scheduledAt = new Date(input.scheduledAt);
     if (input.duration !== undefined) updateData.duration = input.duration;
-    if (input.meetingLink !== undefined) updateData.meetingLink = input.meetingLink || null;
-    if (input.interviewerName !== undefined) updateData.interviewerName = input.interviewerName || null;
+    if (input.meetingLink !== undefined)
+      updateData.meetingLink = input.meetingLink || null;
+    if (input.interviewerName !== undefined)
+      updateData.interviewerName = input.interviewerName || null;
     if (input.status !== undefined) updateData.status = input.status;
 
     return this.db.interview.update({

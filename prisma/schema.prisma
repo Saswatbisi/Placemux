@@ -229,17 +229,18 @@ model JobSkillThreshold {
 }
 
 model Application {
-  id              String             @id @default(auto()) @map("_id") @db.ObjectId
-  jobId           String             @map("job_id") @db.ObjectId
-  userId          String             @map("user_id") @db.ObjectId
-  status          ApplicationStatus  @default(PENDING)
-  job             Job                @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String                   @id @default(auto()) @map("_id") @db.ObjectId
+  jobId           String                   @map("job_id") @db.ObjectId
+  userId          String                   @map("user_id") @db.ObjectId
+  status          ApplicationStatus        @default(PENDING)
+  job             Job                      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   candidateSkills CandidateSkill[]
   offer           Offer?
   interviews      Interview[]
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  statusRecord    ApplicationStatusRecord?
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
 
   @@unique([jobId, userId])
   @@index([status])
@@ -328,4 +329,16 @@ model Interview {
 
   @@map("interviews")
 }
+
+model ApplicationStatusRecord {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  applicationId String      @unique @map("application_id") @db.ObjectId
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  status        String      // "APPLIED", "SHORTLISTED", "INTERVIEWING", "OFFER_GENERATED", "OFFER_ACCEPTED", "OFFER_REJECTED", "OFFER_WITHDRAWN", "REJECTED"
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  @@map("application_statuses")
+}
+
 

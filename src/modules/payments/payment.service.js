@@ -201,7 +201,8 @@ export class PaymentService {
           status: "FAILED",
           gatewayPaymentId,
           gatewaySignature,
-          failureReason: "Payment amount or currency mismatch with gateway record",
+          failureReason:
+            "Payment amount or currency mismatch with gateway record",
         },
       });
       throw new AppError(
@@ -218,7 +219,9 @@ export class PaymentService {
           status: "FAILED",
           gatewayPaymentId,
           gatewaySignature,
-          failureReason: gatewayPayment.error_description || "Payment status on gateway is failed",
+          failureReason:
+            gatewayPayment.error_description ||
+            "Payment status on gateway is failed",
         },
       });
       throw new AppError(
@@ -805,7 +808,10 @@ export class PaymentService {
       });
 
       if (payment && payment.status === "PENDING") {
-        const failureReason = entity.error_description || entity.error_code || "Payment failed on gateway";
+        const failureReason =
+          entity.error_description ||
+          entity.error_code ||
+          "Payment failed on gateway";
         await this.db.payment.update({
           where: { id: payment.id },
           data: {
@@ -959,8 +965,12 @@ export class PaymentService {
     let datesInRange = [];
     const defaultStartDate = new Date();
     defaultStartDate.setDate(defaultStartDate.getDate() - 29); // 30 days ago
-    
-    const start = startDate ? new Date(startDate) : (payments.length > 0 ? payments[0].createdAt : defaultStartDate);
+
+    const start = startDate
+      ? new Date(startDate)
+      : payments.length > 0
+        ? payments[0].createdAt
+        : defaultStartDate;
     const end = endDate ? new Date(endDate) : new Date();
 
     const current = new Date(start);

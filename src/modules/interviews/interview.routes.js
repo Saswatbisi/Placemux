@@ -17,9 +17,8 @@ export function interviewRoutes(db) {
     app.post(
       "/companies/:companyId/applications/:applicationId/interviews",
       async (request, reply) => {
-        const { companyId, applicationId } = companyApplicationParamsSchema.parse(
-          request.params,
-        );
+        const { companyId, applicationId } =
+          companyApplicationParamsSchema.parse(request.params);
         const input = createInterviewSchema.parse(request.body);
         const interview = await service.scheduleInterview(
           companyId,
