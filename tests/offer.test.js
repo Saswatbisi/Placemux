@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import crypto from "node:crypto";
 import { buildApp } from "../src/app.js";
 import { config } from "../src/config.js";
@@ -422,5 +422,44 @@ describe("Offers API", () => {
     expect(body.data.valid).toBe(false);
     expect(body.data.tampered).toBe(true);
     expect(body.data.reason).toContain("validation failed");
+  });
+
+  it("GET /api/v1/offers/:id/verify — allows public access without authentication headers", async () => {
+    const db = createFakeDb();
+
+    const mockData = JSON.stringify({
+      offerId: fakeOffer.id,
+      applicationId: fakeOffer.applicationId,
+      salary: fakeOffer.salary,
+      startDate: fakeOffer.startDate.toISOString(),
+      probationPeriod: fakeOffer.probationPeriod,
+      signature: "Aarav Sharma",
+    });
+    const mockHash = crypto
+      .createHmac("sha256", config.OFFER_SIGNING_SECRET)
+      .update(mockData)
+      .digest("hex");
+
+    const signedOffer = {
+      ...fakeOffer,
+      status: "ACCEPTED",
+      esignApproach: "CRYPTOGRAPHIC",
+      signature: "Aarav Sharma",
+      signatureHash: mockHash,
+    };
+    db.offer.findUnique.mockResolvedValue(signedOffer);
+
+    const app = await buildApp(db);
+    apps.push(app);
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/offers/${fakeOffer.id}/verify`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.valid).toBe(true);
+    expect(body.data.esignApproach).toBe("CRYPTOGRAPHIC");
   });
 });

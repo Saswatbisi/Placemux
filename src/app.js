@@ -14,6 +14,7 @@ import { searchRoutes } from "./modules/search/search.routes.js";
 import { applicationRoutes } from "./modules/applications/application.routes.js";
 import { paymentRoutes } from "./modules/payments/payment.routes.js";
 import { offerRoutes } from "./modules/offers/offer.routes.js";
+import { interviewRoutes } from "./modules/interviews/interview.routes.js";
 
 export async function buildApp(db = prisma) {
   const app = Fastify({
@@ -114,6 +115,7 @@ export async function buildApp(db = prisma) {
   await app.register(applicationRoutes(db), { prefix: "/api/v1" });
   await app.register(paymentRoutes(db), { prefix: "/api/v1/payments" });
   await app.register(offerRoutes(db), { prefix: "/api/v1" });
+  await app.register(interviewRoutes(db), { prefix: "/api/v1" });
 
   app.addHook("onClose", async () => {
     await db.$disconnect();

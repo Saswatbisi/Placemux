@@ -237,6 +237,7 @@ model Application {
   user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   candidateSkills CandidateSkill[]
   offer           Offer?
+  interviews      Interview[]
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 
@@ -304,5 +305,27 @@ model Offer {
   updatedAt         DateTime    @updatedAt @map("updated_at")
 
   @@map("offers")
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+model Interview {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  applicationId   String          @map("application_id") @db.ObjectId
+  application     Application     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  title           String
+  scheduledAt     DateTime        @map("scheduled_at")
+  duration        Int             @default(30) @map("duration") // in minutes
+  status          InterviewStatus @default(SCHEDULED)
+  meetingLink     String?         @map("meeting_link")
+  interviewerName String?         @map("interviewer_name")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@map("interviews")
 }
 
