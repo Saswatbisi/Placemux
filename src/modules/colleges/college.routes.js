@@ -4,6 +4,10 @@ import {
   addStudentSchema,
   joinCollegeSchema,
   collegeIdParamsSchema,
+  studentIdParamsSchema,
+  updateStudentSkillsSchema,
+  jobRecommendationsQuerySchema,
+  studentRecommendationsQuerySchema,
 } from "./college.schemas.js";
 import { CollegeService } from "./college.service.js";
 
@@ -80,6 +84,44 @@ export function collegeRoutes(db) {
         const { id } = collegeIdParamsSchema.parse(request.params);
         const dashboard = await service.getCollegeDashboard(id, request.user.userId);
         return { data: dashboard };
+      });
+
+      // PUT /api/v1/colleges/:id/students/:studentId/skills
+      authApp.put("/:id/students/:studentId/skills", async (request) => {
+        const { id, studentId } = studentIdParamsSchema.parse(request.params);
+        const input = updateStudentSkillsSchema.parse(request.body);
+        const result = await service.updateStudentSkills(id, request.user.userId, studentId, input);
+        return { data: result };
+      });
+
+      // GET /api/v1/colleges/:id/reports/students
+      authApp.get("/:id/reports/students", async (request) => {
+        const { id } = collegeIdParamsSchema.parse(request.params);
+        const report = await service.getStudentPlacementReport(id, request.user.userId);
+        return { data: report };
+      });
+
+      // GET /api/v1/colleges/:id/reports/companies
+      authApp.get("/:id/reports/companies", async (request) => {
+        const { id } = collegeIdParamsSchema.parse(request.params);
+        const report = await service.getCompanyPlacementReport(id, request.user.userId);
+        return { data: report };
+      });
+
+      // GET /api/v1/colleges/:id/recommendations/jobs
+      authApp.get("/:id/recommendations/jobs", async (request) => {
+        const { id } = collegeIdParamsSchema.parse(request.params);
+        const { studentId } = jobRecommendationsQuerySchema.parse(request.query);
+        const recommendations = await service.getJobRecommendationsForStudent(id, request.user.userId, studentId);
+        return { data: recommendations };
+      });
+
+      // GET /api/v1/colleges/:id/recommendations/students
+      authApp.get("/:id/recommendations/students", async (request) => {
+        const { id } = collegeIdParamsSchema.parse(request.params);
+        const { jobId } = studentRecommendationsQuerySchema.parse(request.query);
+        const recommendations = await service.getStudentRecommendationsForJob(id, request.user.userId, jobId);
+        return { data: recommendations };
       });
     });
   };

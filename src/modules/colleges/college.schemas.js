@@ -43,3 +43,34 @@ export const collegeIdParamsSchema = z
     id: objectIdSchema,
   })
   .strict();
+
+export const studentIdParamsSchema = z
+  .object({
+    id: objectIdSchema,
+    studentId: objectIdSchema,
+  })
+  .strict();
+
+export const updateStudentSkillsSchema = z
+  .object({
+    skills: z.array(
+      z.object({
+        skill: z.string().trim().min(1, "Skill name is required"),
+        level: z.number().int().min(1).max(100, "Level must be between 1 and 100"),
+      })
+    ),
+  })
+  .strict();
+
+export const jobRecommendationsQuerySchema = z
+  .object({
+    studentId: objectIdSchema,
+  })
+  .strict();
+
+export const studentRecommendationsQuerySchema = z
+  .object({
+    jobId: objectIdSchema,
+  })
+  .strict();
+

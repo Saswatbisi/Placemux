@@ -99,6 +99,8 @@ model User {
   collegeId          String?             @map("college_id") @db.ObjectId
   college            College?            @relation("CollegeStudents", fields: [collegeId], references: [id])
   collegeMemberships CollegeMembership[]
+  resumeText         String?             @map("resume_text")
+  skillsJson         String?             @map("skills_json")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
 

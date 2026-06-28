@@ -78,21 +78,66 @@ class InMemoryDb {
 
   $disconnect = async () => {};
 
+  #resolveApplicationRelations(app) {
+    const statusRecord = this.applicationStatusRecords.find(sr => sr.applicationId === app.id) || null;
+    const offer = this.offers.find(o => o.applicationId === app.id) || null;
+    const candidateSkills = this.candidateSkills.filter(cs => cs.applicationId === app.id);
+    const job = this.jobs.find(j => j.id === app.jobId) || null;
+    const company = job ? this.companies.find(c => c.id === job.companyId) : null;
+    
+    return {
+      ...app,
+      statusRecord,
+      offer: offer ? {
+        ...offer,
+        application: {
+          ...app,
+          job: job ? {
+            ...job,
+            company: company ? { displayName: company.displayName } : { displayName: "Unknown" }
+          } : null
+        }
+      } : null,
+      candidateSkills,
+      job: job ? {
+        ...job,
+        company: company ? { displayName: company.displayName } : { displayName: "Unknown" }
+      } : null,
+      user: this.users.find(u => u.id === app.userId)
+    };
+  }
+
   user = {
-    findUnique: async ({ where }) => {
+    findUnique: async ({ where, include, select }) => {
+      let u;
       if (where.email) {
-        return this.users.find(u => u.email === where.email) || null;
+        u = this.users.find(u => u.email === where.email) || null;
+      } else if (where.id) {
+        u = this.users.find(u => u.id === where.id) || null;
       }
-      if (where.id) {
-        return this.users.find(u => u.id === where.id) || null;
+      if (!u) return null;
+      u = { ...u };
+      if (include?.applications || select?.applications) {
+        u.applications = this.applications
+          .filter(a => a.userId === u.id)
+          .map(a => this.#resolveApplicationRelations(a));
       }
-      return null;
+      return u;
     },
-    findMany: async ({ where }) => {
-      if (where.collegeId) {
-        return this.users.filter(u => u.collegeId === where.collegeId);
+    findMany: async ({ where, include, select }) => {
+      let filtered = this.users;
+      if (where?.collegeId) {
+        filtered = this.users.filter(u => u.collegeId === where.collegeId);
       }
-      return this.users;
+      return filtered.map(u => {
+        u = { ...u };
+        if (include?.applications || select?.applications) {
+          u.applications = this.applications
+            .filter(a => a.userId === u.id)
+            .map(a => this.#resolveApplicationRelations(a));
+        }
+        return u;
+      });
     },
     create: async ({ data }) => {
       const u = {
@@ -178,13 +223,23 @@ class InMemoryDb {
         x => x.userId === userId_collegeId.userId && x.collegeId === userId_collegeId.collegeId
       );
       if (!m) return null;
-      const col = this.colleges.find(c => c.id === m.collegeId);
+      const college = this.colleges.find(c => c.id === m.collegeId);
       return {
         role: m.role,
         college: {
-          status: col ? col.status : "ACTIVE"
+          status: college ? college.status : "ACTIVE"
         }
       };
+    },
+    create: async ({ data }) => {
+      const m = {
+        id: this.generateId(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...data
+      };
+      this.collegeMemberships.push(m);
+      return m;
     },
     upsert: async ({ where, create, update }) => {
       const { userId_collegeId } = where;
@@ -285,6 +340,27 @@ class InMemoryDb {
         skillThresholds: thresholds,
         company
       };
+    },
+    findMany: async ({ where }) => {
+      let filtered = this.jobs;
+      if (where?.status) {
+        filtered = filtered.filter(j => j.status === where.status);
+      }
+      if (where?.company?.status?.not) {
+        filtered = filtered.filter(j => {
+          const comp = this.companies.find(c => c.id === j.companyId);
+          return comp && comp.status !== where.company.status.not;
+        });
+      }
+      return filtered.map(j => {
+        const thresholds = this.jobSkillThresholds.filter(t => t.jobId === j.id);
+        const company = this.companies.find(c => c.id === j.companyId);
+        return {
+          ...j,
+          skillThresholds: thresholds,
+          company
+        };
+      });
     },
     create: async ({ data }) => {
       const jobId = this.generateId();
@@ -838,6 +914,107 @@ async function runCollegeDryRun() {
 
   console.log(`   🔍 Access request status code: ${illegalRes.statusCode} (Expected: 403 Forbidden)`);
   console.log(`   🚨 Isolation Check Message: "${illegalRes.json().error.message}"`);
+
+  // --- STEP 8: Update Student Profile Skills ---
+  console.log("\n👉 STEP 8: Updating student profile skills for Student B (Bhavna Rao)...");
+  const updateSkillsRes = await app.inject({
+    method: "PUT",
+    url: `/api/v1/colleges/${collegeAId}/students/${studentUserB.id}/skills`,
+    headers: authHeaders(officerAToken),
+    payload: {
+      skills: [{ skill: "Java", level: 90 }]
+    }
+  });
+
+  if (updateSkillsRes.statusCode !== 200) {
+    console.error("❌ Step 8 Failed:", updateSkillsRes.json());
+    process.exit(1);
+  }
+  console.log(`   ✅ Student B profile skills updated to:`, updateSkillsRes.json().data.skills);
+
+  // --- STEP 9: Fetch Detailed Stats Reports ---
+  console.log("\n👉 STEP 9: Fetching student-wise and company-wise placement reports...");
+  
+  const studentReportRes = await app.inject({
+    method: "GET",
+    url: `/api/v1/colleges/${collegeAId}/reports/students`,
+    headers: authHeaders(officerAToken)
+  });
+  
+  const companyReportRes = await app.inject({
+    method: "GET",
+    url: `/api/v1/colleges/${collegeAId}/reports/companies`,
+    headers: authHeaders(officerAToken)
+  });
+
+  if (studentReportRes.statusCode !== 200 || companyReportRes.statusCode !== 200) {
+    console.error("❌ Step 9 Failed:", studentReportRes.json(), companyReportRes.json());
+    process.exit(1);
+  }
+
+  console.log(`   ✅ Student placement report:`);
+  for (const s of studentReportRes.json().data) {
+    console.log(`     - ${s.name} (${s.email}): Status=${s.placementStatus}, AppsCount=${s.applicationsCount}, CTC=${s.acceptedOffer ? `₹${s.acceptedOffer.salary}` : "N/A"}`);
+  }
+
+  console.log(`   ✅ Company placement report:`);
+  for (const c of companyReportRes.json().data) {
+    console.log(`     - ${c.companyName}: Applied=${c.appliedCount}, Offers=${c.offersCount}, Placed=${c.acceptedCount}, AvgCTC=₹${c.averageCTC}`);
+  }
+
+  // --- STEP 10: Query Job Recommendations for Student ---
+  console.log("\n👉 STEP 10: Querying job recommendations for unplaced Student B...");
+  const jobRecsRes = await app.inject({
+    method: "GET",
+    url: `/api/v1/colleges/${collegeAId}/recommendations/jobs?studentId=${studentUserB.id}`,
+    headers: authHeaders(officerAToken)
+  });
+
+  if (jobRecsRes.statusCode !== 200) {
+    console.error("❌ Step 10 Failed:", jobRecsRes.json());
+    process.exit(1);
+  }
+
+  const jobRecs = jobRecsRes.json().data.recommendations;
+  console.log(`   ✅ Recommended jobs for ${studentUserB.name}:`);
+  for (const rec of jobRecs) {
+    console.log(`     - ${rec.job.title} at ${rec.job.companyName} (${rec.job.location}): Match=${rec.matchPercentage}%`);
+  }
+
+  // --- STEP 11: Query Student Recommendations for Job ---
+  console.log("\n👉 STEP 11: Querying recommended students from NIT Trichy for Job (Software Engineer)...");
+  const studentRecsRes = await app.inject({
+    method: "GET",
+    url: `/api/v1/colleges/${collegeAId}/recommendations/students?jobId=${jobId}`,
+    headers: authHeaders(officerAToken)
+  });
+
+  if (studentRecsRes.statusCode !== 200) {
+    console.error("❌ Step 11 Failed:", studentRecsRes.json());
+    process.exit(1);
+  }
+
+  const studentRecs = studentRecsRes.json().data.recommendations;
+  console.log(`   ✅ Recommended candidates for Software Engineer job:`);
+  for (const rec of studentRecs) {
+    console.log(`     - ${rec.student.name} (${rec.student.email}): Suitability Match Score (Excess Skill level) = ${rec.matchScore}`);
+  }
+
+  // --- STEP 12: Verify Isolation on new Reporting & Recommendation endpoints ---
+  console.log("\n👉 STEP 12: Verifying data isolation on reporting and recommendation endpoints...");
+  const illegalStudentReport = await app.inject({
+    method: "GET",
+    url: `/api/v1/colleges/${collegeAId}/reports/students`,
+    headers: authHeaders(adminBToken)
+  });
+  console.log(`   🔍 Illegal Student Report status: ${illegalStudentReport.statusCode} (Expected: 403)`);
+
+  const illegalJobRecs = await app.inject({
+    method: "GET",
+    url: `/api/v1/colleges/${collegeAId}/recommendations/jobs?studentId=${studentUserB.id}`,
+    headers: authHeaders(adminBToken)
+  });
+  console.log(`   🔍 Illegal Job Recommendations status: ${illegalJobRecs.statusCode} (Expected: 403)`);
 
   console.log("\n======================================================================");
   console.log("🎉 SUCCESS: College Portal & Reporting API Dry Run completed with 100% success!");
