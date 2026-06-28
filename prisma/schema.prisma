@@ -86,6 +86,11 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum UserRole {
+  STUDENT
+  ADMIN
+}
+
 model User {
   id                 String              @id @default(auto()) @map("_id") @db.ObjectId
   name               String
@@ -93,6 +98,7 @@ model User {
   passwordHash       String              @map("password_hash")
   phone              String?
   status             UserStatus          @default(ACTIVE)
+  role               UserRole            @default(STUDENT)
   memberships        CompanyMembership[]
   applications       Application[]
   payments           Payment[]
@@ -101,6 +107,7 @@ model User {
   collegeMemberships CollegeMembership[]
   resumeText         String?             @map("resume_text")
   skillsJson         String?             @map("skills_json")
+  reviewedAttempts   AssessmentAttempt[] @relation("ReviewedAttempts")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
 
@@ -241,11 +248,12 @@ model Application {
   job             Job                      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   candidateSkills CandidateSkill[]
-  offer           Offer?
-  interviews      Interview[]
-  statusRecord    ApplicationStatusRecord?
-  createdAt       DateTime                 @default(now()) @map("created_at")
-  updatedAt       DateTime                 @updatedAt @map("updated_at")
+  offer             Offer?
+  interviews        Interview[]
+  statusRecord      ApplicationStatusRecord?
+  assessmentAttempt AssessmentAttempt?
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
 
   @@unique([jobId, userId])
   @@index([status])
@@ -376,6 +384,62 @@ model CollegeMembership {
 
   @@unique([userId, collegeId])
   @@map("college_memberships")
+}
+
+enum AssessmentDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum ItemStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model AssessmentItem {
+  id            String               @id @default(auto()) @map("_id") @db.ObjectId
+  skillKey      String               @map("skill_key")
+  difficulty    AssessmentDifficulty
+  questionText  String               @map("question_text")
+  optionsJson   String               @map("options_json")
+  correctAnswer String               @map("correct_answer")
+  status        ItemStatus           @default(ACTIVE)
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  @@map("assessment_items")
+}
+
+enum ProctoringReviewStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum IntegrityVerdict {
+  CLEAN
+  SUSPICIOUS_HEURISTICS
+  CONFIRMED_MALPRACTICE
+}
+
+model AssessmentAttempt {
+  id              String                 @id @default(auto()) @map("_id") @db.ObjectId
+  applicationId   String                 @unique @map("application_id") @db.ObjectId
+  application     Application            @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  userId          String                 @map("user_id") @db.ObjectId
+  score           Int
+  proctoringFlags Int                    @default(0) @map("proctoring_flags")
+  reviewStatus    ProctoringReviewStatus @default(PENDING) @map("review_status")
+  verdict         IntegrityVerdict       @default(CLEAN)
+  notes           String?
+  reviewedById    String?                @map("reviewed_by_id") @db.ObjectId
+  reviewedBy      User?                  @relation("ReviewedAttempts", fields: [reviewedById], references: [id])
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+
+  @@map("assessment_attempts")
 }
 
 

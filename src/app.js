@@ -17,6 +17,7 @@ import { offerRoutes } from "./modules/offers/offer.routes.js";
 import { interviewRoutes } from "./modules/interviews/interview.routes.js";
 import { parserRoutes } from "./modules/parser/parser.routes.js";
 import { collegeRoutes } from "./modules/colleges/college.routes.js";
+import { adminRoutes } from "./modules/admin/admin.routes.js";
 
 
 export async function buildApp(db = prisma) {
@@ -47,6 +48,33 @@ export async function buildApp(db = prisma) {
         },
       });
       return;
+    }
+  });
+
+  app.decorate("requireAdmin", async (request, reply) => {
+    if (!request.user) {
+      return reply.code(401).send({
+        error: {
+          code: "UNAUTHORIZED",
+          message: "A valid access token is required",
+          requestId: request.id,
+        },
+      });
+    }
+
+    const user = await db.user.findUnique({
+      where: { id: request.user.userId },
+      select: { role: true },
+    });
+
+    if (!user || user.role !== "ADMIN") {
+      return reply.code(403).send({
+        error: {
+          code: "FORBIDDEN",
+          message: "Only platform administrators can perform this action",
+          requestId: request.id,
+        },
+      });
     }
   });
 
@@ -121,6 +149,7 @@ export async function buildApp(db = prisma) {
   await app.register(interviewRoutes(db), { prefix: "/api/v1" });
   await app.register(parserRoutes(db), { prefix: "/api/v1/parser" });
   await app.register(collegeRoutes(db), { prefix: "/api/v1/colleges" });
+  await app.register(adminRoutes(db), { prefix: "/api/v1/admin" });
 
 
   app.addHook("onClose", async () => {
